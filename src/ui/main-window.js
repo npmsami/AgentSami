@@ -10,7 +10,7 @@ class MainWindowUI {
     constructor() {
         this.isInteractive = false;
         this.isHidden = false;
-        this.currentSkill = 'dsa'; // Default, will be updated from settings
+        this.currentSkill = 'cloud-engineering'; // Default, will be updated from settings
         this.statusDot = null;
         this.skillIndicator = null;
         this.micButton = null;
@@ -20,7 +20,26 @@ class MainWindowUI {
         
         // Define available skills for navigation
         this.availableSkills = [
-            'dsa'
+            'cloud-engineering',
+            'sre',
+            'platform-engineering',
+            'infrastructure-engineering',
+            'devops-engineering',
+            'devsecops-engineering',
+            'cicd-engineering',
+            'release-engineering',
+            'build-engineering',
+            'automation-engineering',
+            'iac-engineering',
+            'kubernetes-engineering',
+            'observability-engineering',
+            'monitoring-engineering',
+            'cloud-security-engineering',
+            'systems-engineering',
+            'network-engineering',
+            'performance-engineering',
+            'reliability-engineering',
+            'operations-engineering',
         ];
         
         this.init();
@@ -150,6 +169,10 @@ class MainWindowUI {
             } else {
                 this.statusDot.classList.add('non-interactive');
             }
+
+            // Update the status label text in the new panel design
+            const statusLabel = document.getElementById('statusLabel');
+            if (statusLabel) statusLabel.textContent = this.isInteractive ? 'On' : 'Off';
             
             logger.debug('Status dot updated', {
                 component: 'MainWindowUI',
@@ -230,17 +253,17 @@ class MainWindowUI {
     resizeWindowToContent() {
         // Wait for DOM to fully render
         setTimeout(() => {
-            const commandTab = document.querySelector('.command-tab');
+            const commandTab = document.querySelector('.panel') || document.querySelector('.command-tab');
             if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
                 const rect = commandTab.getBoundingClientRect();
                 const width = Math.ceil(rect.width);
                 let height = Math.ceil(rect.height);
 
-                // If shortcuts popover is visible, extend height to fit it
+                // If shortcuts popover is visible, extend width to include it
                 if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
                     const popRect = this.shortcutsPopover.getBoundingClientRect();
-                    // popover is positioned below the bar (top:36px), add that plus its height and a small margin
-                    height = Math.max(height, Math.ceil(36 + popRect.height + 8));
+                    // popover is positioned to the right in new design
+                    height = Math.max(height, Math.ceil(popRect.height + 16));
                 }
                 
                 logger.debug('Resizing window to content', {
@@ -262,9 +285,7 @@ class MainWindowUI {
     this.infoButton = document.getElementById('infoButton');
     this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
-        // NEW: Screenshot button is the first .command-item without id
-        const commandItems = document.querySelectorAll('.command-item');
-        this.screenshotButton = commandItems && commandItems[0];
+        this.screenshotButton = document.getElementById('screenshotButton');
 
     if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
@@ -277,16 +298,20 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
+        // Skill indicator click handler cycles to next skill
         this.skillIndicator.addEventListener('click', () => {
-            if (!this.isInteractive) return;
-            const newSkill = 'dsa';
+            const currentIndex = this.availableSkills.indexOf(this.currentSkill);
+            const nextIndex = (currentIndex + 1) % this.availableSkills.length;
+            const newSkill = this.availableSkills[nextIndex];
             if (window.electronAPI && window.electronAPI.updateActiveSkill) {
                 window.electronAPI.updateActiveSkill(newSkill).then(() => {
-                    this.handleSkillActivated(newSkill);
+                    this.currentSkill = newSkill;
+                    this.updateSkillIndicator();
+                    this.showSkillChangeNotification(newSkill, 1);
                 });
             } else {
-                this.handleSkillActivated(newSkill);
+                this.currentSkill = newSkill;
+                this.updateSkillIndicator();
             }
         });
 
@@ -486,15 +511,26 @@ class MainWindowUI {
     handleLLMResponse(data) {
         const skill = data.skill || data.metadata?.skill || 'General';
         const skillNames = {
-            'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
-            'sales': 'Sales',
-            'presentation': 'Presentation',
-            'data-science': 'Data Science',
-            'programming': 'Programming',
-            'devops': 'DevOps',
-            'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'cloud-engineering': 'Cloud Eng',
+            'sre': 'SRE',
+            'platform-engineering': 'Platform Eng',
+            'infrastructure-engineering': 'Infra Eng',
+            'devops-engineering': 'DevOps',
+            'devsecops-engineering': 'DevSecOps',
+            'cicd-engineering': 'CI/CD',
+            'release-engineering': 'Release Eng',
+            'build-engineering': 'Build Eng',
+            'automation-engineering': 'Automation',
+            'iac-engineering': 'IaC',
+            'kubernetes-engineering': 'Kubernetes',
+            'observability-engineering': 'Observability',
+            'monitoring-engineering': 'Monitoring',
+            'cloud-security-engineering': 'Cloud Security',
+            'systems-engineering': 'Systems Eng',
+            'network-engineering': 'Networking',
+            'performance-engineering': 'Performance',
+            'reliability-engineering': 'Reliability',
+            'operations-engineering': 'Operations',
         };
         
         const displaySkill = skillNames[skill] || skill.toUpperCase();
@@ -612,6 +648,10 @@ class MainWindowUI {
         this.isRecording = true;
         if (this.micButton) {
             this.micButton.classList.add('recording');
+            const label = this.micButton.querySelector('.btn-label');
+            const hint  = this.micButton.querySelector('.btn-hint');
+            if (label) label.textContent = 'Recording…';
+            if (hint)  hint.textContent  = 'Press Alt+R to stop';
         }
         logger.debug('Recording started', { component: 'MainWindowUI' });
     }
@@ -620,21 +660,36 @@ class MainWindowUI {
         this.isRecording = false;
         if (this.micButton) {
             this.micButton.classList.remove('recording');
+            const label = this.micButton.querySelector('.btn-label');
+            const hint  = this.micButton.querySelector('.btn-hint');
+            if (label) label.textContent = 'Record';
+            if (hint)  hint.textContent  = 'Press to start listening';
         }
         logger.debug('Recording stopped', { component: 'MainWindowUI' });
     }
 
     updateSkillIndicator() {
         const skillNames = {
-            'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
-            'sales': 'Sales',
-            'presentation': 'Presentation',
-            'data-science': 'Data Science',
-            'programming': 'Programming',
-            'devops': 'DevOps',
-            'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'cloud-engineering': 'Cloud Eng',
+            'sre': 'SRE',
+            'platform-engineering': 'Platform Eng',
+            'infrastructure-engineering': 'Infra Eng',
+            'devops-engineering': 'DevOps',
+            'devsecops-engineering': 'DevSecOps',
+            'cicd-engineering': 'CI/CD',
+            'release-engineering': 'Release Eng',
+            'build-engineering': 'Build Eng',
+            'automation-engineering': 'Automation',
+            'iac-engineering': 'IaC',
+            'kubernetes-engineering': 'Kubernetes',
+            'observability-engineering': 'Observability',
+            'monitoring-engineering': 'Monitoring',
+            'cloud-security-engineering': 'Cloud Security',
+            'systems-engineering': 'Systems Eng',
+            'network-engineering': 'Networking',
+            'performance-engineering': 'Performance',
+            'reliability-engineering': 'Reliability',
+            'operations-engineering': 'Operations',
         };
         
         logger.info('Updating skill indicator', {
@@ -649,7 +704,7 @@ class MainWindowUI {
         }
         
         const skillName = skillNames[this.currentSkill] || this.currentSkill.toUpperCase();
-        const skillSpan = this.skillIndicator.querySelector('span');
+        const skillSpan = this.skillIndicator.querySelector('.skill-name') || this.skillIndicator.querySelector('span');
         
         logger.info('Looking for skill span element', {
             component: 'MainWindowUI',
@@ -693,10 +748,6 @@ class MainWindowUI {
 
     navigateSkill(direction) {
         
-        if (!this.isInteractive) {
-            return;
-        }
-        
         const currentIndex = this.availableSkills.indexOf(this.currentSkill);
         if (currentIndex === -1) {
             logger.error('Current skill not found in available skills array');
@@ -739,55 +790,50 @@ class MainWindowUI {
 
     showSkillChangeNotification(skill, direction) {
         const skillNames = {
-            'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
-            'sales': 'Sales',
-            'presentation': 'Presentation',
-            'data-science': 'Data Science',
-            'programming': 'Programming',
-            'devops': 'DevOps',
-            'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'cloud-engineering': 'Cloud Eng',
+            'sre': 'SRE',
+            'platform-engineering': 'Platform Eng',
+            'infrastructure-engineering': 'Infra Eng',
+            'devops-engineering': 'DevOps',
+            'devsecops-engineering': 'DevSecOps',
+            'cicd-engineering': 'CI/CD',
+            'release-engineering': 'Release Eng',
+            'build-engineering': 'Build Eng',
+            'automation-engineering': 'Automation',
+            'iac-engineering': 'IaC',
+            'kubernetes-engineering': 'Kubernetes',
+            'observability-engineering': 'Observability',
+            'monitoring-engineering': 'Monitoring',
+            'cloud-security-engineering': 'Cloud Security',
+            'systems-engineering': 'Systems Eng',
+            'network-engineering': 'Networking',
+            'performance-engineering': 'Performance',
+            'reliability-engineering': 'Reliability',
+            'operations-engineering': 'Operations',
         };
         
         const displayName = skillNames[skill] || skill.toUpperCase();
-        const arrow = direction > 0 ? '↓' : '↑';
-        
-        // Create temporary notification
+        const arrow = direction > 0 ? '→' : '←';
+
+        // Use dedicated toast element from new panel design, fall back to floating div
+        const toast = document.getElementById('skillToast');
+        if (toast) {
+            toast.textContent = `${arrow} ${displayName}`;
+            toast.classList.add('show');
+            clearTimeout(toast._hideTimer);
+            toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 1200);
+            return;
+        }
+
+        // Fallback for older layout
         const notification = document.createElement('div');
-        notification.className = 'skill-change-notification';
         notification.innerHTML = `${arrow} ${displayName}`;
-        notification.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        `;
-        
+        notification.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;z-index:1000;opacity:0;transition:opacity 0.2s ease;`;
         document.body.appendChild(notification);
-        
-        // Animate in
-        setTimeout(() => {
-            notification.style.opacity = '1';
-        }, 10);
-        
-        // Remove after 1 second
+        setTimeout(() => { notification.style.opacity = '1'; }, 10);
         setTimeout(() => {
             notification.style.opacity = '0';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 200);
+            setTimeout(() => { if (notification.parentNode) notification.parentNode.removeChild(notification); }, 200);
         }, 1000);
     }
 
@@ -892,7 +938,7 @@ class MainWindowUI {
         modal.innerHTML = `
             <div class="bg-gray-900 text-white p-6 rounded-lg max-w-md w-full">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold">🤖 Gemini Flash 1.5 Configuration</h2>
+                    <h2 class="text-xl font-bold">🤖 OpenAI Configuration</h2>
                     <button class="text-gray-400 hover:text-white" onclick="this.closest('.fixed').remove()">✕</button>
                 </div>
                 
@@ -903,18 +949,18 @@ class MainWindowUI {
                 
                 <div class="mb-4">
                     <label class="block text-sm font-medium mb-2">API Key:</label>
-                    <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key" 
+                    <input type="password" id="openaiApiKey" placeholder="Enter your OpenAI API key (sk-...)" 
                            class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
                     <p class="text-xs text-gray-400 mt-1">
-                        Get your API key from: <a href="https://makersuite.google.com/app/apikey" target="_blank" class="text-blue-400">Google AI Studio</a>
+                        Get your API key from: <a href="https://platform.openai.com/api-keys" target="_blank" class="text-blue-400">OpenAI Platform</a>
                     </p>
                 </div>
                 
                 <div class="flex space-x-2">
-                    <button onclick="mainWindowUI.configureGemini()" class="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">
+                    <button onclick="mainWindowUI.configureOpenAI()" class="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">
                         Configure
                     </button>
-                    <button onclick="mainWindowUI.testGeminiConnection()" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded">
+                    <button onclick="mainWindowUI.testOpenAIConnection()" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded">
                         Test Connection
                     </button>
                 </div>
@@ -929,52 +975,52 @@ class MainWindowUI {
         return modal;
     }
 
-    async configureGemini() {
-        const apiKey = document.getElementById('geminiApiKey').value.trim();
+    async configureOpenAI() {
+        const apiKey = document.getElementById('openaiApiKey').value.trim();
         if (!apiKey) {
             this.showNotification('Please enter an API key', 'error');
             return;
         }
         
         try {
-            const result = await window.electronAPI.setGeminiApiKey(apiKey);
+            const result = await window.electronAPI.setOpenAIApiKey(apiKey);
             if (result.success) {
-                this.showNotification('Gemini API key configured successfully!', 'success');
+                this.showNotification('OpenAI API key configured successfully!', 'success');
                 document.querySelector('.fixed').remove();
                 
-                logger.info('Gemini API key configured', { component: 'MainWindowUI' });
+                logger.info('OpenAI API key configured', { component: 'MainWindowUI' });
             } else {
                 this.showNotification(`Configuration failed: ${result.error}`, 'error');
-                logger.error('Gemini configuration failed', {
+                logger.error('OpenAI configuration failed', {
                     component: 'MainWindowUI',
                     error: result.error
                 });
             }
         } catch (error) {
             this.showNotification(`Error: ${error.message}`, 'error');
-            logger.error('Gemini configuration error', {
+            logger.error('OpenAI configuration error', {
                 component: 'MainWindowUI',
                 error: error.message
             });
         }
     }
 
-    async testGeminiConnection() {
+    async testOpenAIConnection() {
         try {
-            const result = await window.electronAPI.testGeminiConnection();
+            const result = await window.electronAPI.testOpenAIConnection();
             if (result.success) {
-                this.showNotification('Gemini connection test successful!', 'success');
-                logger.info('Gemini connection test successful', { component: 'MainWindowUI' });
+                this.showNotification('OpenAI connection test successful!', 'success');
+                logger.info('OpenAI connection test successful', { component: 'MainWindowUI' });
             } else {
                 this.showNotification(`Connection test failed: ${result.error}`, 'error');
-                logger.error('Gemini connection test failed', {
+                logger.error('OpenAI connection test failed', {
                     component: 'MainWindowUI',
                     error: result.error
                 });
             }
         } catch (error) {
             this.showNotification(`Error: ${error.message}`, 'error');
-            logger.error('Gemini connection test error', {
+            logger.error('OpenAI connection test error', {
                 component: 'MainWindowUI',
                 error: error.message
             });
@@ -1042,7 +1088,7 @@ class MainWindowUI {
             document.body.removeChild(menu);
         });
 
-        const quitOption = this.createMenuItem('Quit OpenCluely', 'fa-power-off', () => {
+        const quitOption = this.createMenuItem('Quit AgentSami', 'fa-power-off', () => {
             if (window.electronAPI) {
                 window.electronAPI.quitApp();
             }
@@ -1142,8 +1188,9 @@ if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
                 
         mainWindowUI = new MainWindowUI();
-        // Make it globally accessible for debugging
+        // Make it globally accessible for debugging and inline button wiring
         window.mainWindowUI = mainWindowUI;
+        window._mainWindowUI = mainWindowUI;
         logger.info('MainWindowUI initialized and available as window.mainWindowUI');
     });
 }

@@ -7,6 +7,8 @@ class LLMResponseWindowUI {
     this.currentSkill = "dsa";
     this.isInteractive = false;
     this.scrollableElements = [];
+    this.isStreaming = false;
+    this.streamBuffer = '';
 
     this.elements = {};
 
@@ -78,7 +80,28 @@ class LLMResponseWindowUI {
       logger.debug("show-loading event received", {
         component: "LLMResponseWindowUI",
       });
+      this.streamBuffer = '';
+      this.isStreaming = false;
       this.showLoadingState();
+    });
+
+    ipcRenderer.on("llm-stream-chunk", (event, { chunk }) => {
+      if (!this.isStreaming) {
+        this.isStreaming = true;
+        this.streamBuffer = '';
+        this.hideLoadingState();
+        this.showResponseContent();
+        this.elements.splitLayout?.classList.add("hidden");
+        this.elements.fullContent?.classList.remove("hidden");
+        if (this.elements.fullMarkdown) {
+          this.elements.fullMarkdown.innerHTML = '<span class="stream-text"></span>';
+        }
+      }
+      this.streamBuffer += chunk;
+      const streamEl = this.elements.fullMarkdown?.querySelector('.stream-text');
+      if (streamEl) {
+        streamEl.textContent = this.streamBuffer;
+      }
     });
 
     ipcRenderer.on("display-llm-response", (event, data) => {
@@ -91,6 +114,9 @@ class LLMResponseWindowUI {
         eventOrigin: event ? "valid" : "invalid",
         timestamp: new Date().toISOString(),
       });
+
+      this.isStreaming = false;
+      this.streamBuffer = '';
 
       // Add a small delay to ensure DOM is ready
       setTimeout(() => {

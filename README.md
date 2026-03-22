@@ -1,360 +1,205 @@
 <div align="center">
 
-# 🧠 OpenCluely 
+# AgentSami
 
-<!-- Development Banner -->
-<p align="center">
-  <img src="https://img.shields.io/badge/Status-Under%20Active%20Development-FFA500?style=for-the-badge&logo=github&logoColor=white" alt="Under Active Development" />
-</p>
-<p align="center" style="margin-top:-8px;">
-  <em>Core is working; improvements are shipping daily.</em>
-</p>
+**AI-powered desktop assistant for technical interviews and problem solving**
 
 <p align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=35&duration=3000&pause=1000&color=2D9CDB&center=true&vCenter=true&width=600&lines=OpenCluely;Invisible+Interview+Assistant;AI-Powered+Real-Time+Help;Stealth+Technology+Expert" alt="OpenCluely Typing Animation" />
+  <img src="https://img.shields.io/badge/Electron-29.x-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron" />
+  <img src="https://img.shields.io/badge/LLM-OpenAI-412991?style=flat-square&logo=openai&logoColor=white" alt="OpenAI" />
+  <img src="https://img.shields.io/badge/Speech-Google%20Cloud%20(optional)-4285F4?style=flat-square&logo=googlecloud&logoColor=white" alt="Google Speech" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/OpenCluely-AI%20Interview%20Assistant-2D9CDB?style=for-the-badge&logo=robot&logoColor=white" alt="OpenCluely Badge" />
+  <em>Stealth-oriented overlay UI, screen capture + vision, optional live transcription.</em>
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Cross%20Platform-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/Stealth-100%25%20Invisible-red?style=flat-square" alt="Stealth" />
-  <img src="https://img.shields.io/badge/AI-Gemini%20Powered-orange?style=flat-square" alt="AI" />
-  <img src="https://img.shields.io/badge/Speech-Azure%20Optional-blueviolet?style=flat-square" alt="Speech" />
-</p>
-
----
-
-
-**OpenCluely** is a revolutionary AI-powered desktop application that provides **invisible, real-time assistance** during technical rounds.
-
-## 🎬 Demo Video
-
-https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 </div>
 
-## 🌟 Why OpenCluely?
+---
 
-<table>
-<tr>
-<td width="50%">
+## Overview
 
-### 🥷 **100% Stealth Mode**
-- **Invisible to Screen Sharing**: Zoom, Teams, Meet, Discord
-- **Process Disguise**: Appears as normal system process (Terminal, Activity Monitor, Settings)
-- **Click-Through Windows**: Transparent overlay technology
-- **Draggable UI**: Move windows anywhere on screen
-- **Zero Detection**: Bypasses all recording software
+**AgentSami** is an [Electron](https://www.electronjs.org/) desktop app that captures your screen (or listens with a mic) and sends context to **OpenAI** using skill-specific system prompts. Responses stream into a floating **AI Response** window; a separate **Chat** window supports ongoing conversation with session memory.
 
-</td>
-<td width="50%">
+The app is designed with **stealth-oriented** behavior (e.g. process title / disguise options in config) so overlays can be less conspicuous during screen shares. Use it **ethically** and only where policy allows.
 
-### 🚀 **AI-Powered Intelligence**
-- **Direct Image Analysis**: Screenshots are analyzed by Gemini (no Tesseract OCR)
-- **Voice Commands**: Optional Azure Speech (Whisper questions, get instant answers)
-- **Context Memory**: Remembers entire interview conversation
-- **Multi-Language Support**: C++, Python, Java, JavaScript, C
-- **Smart Response Window**: Draggable with close button
+### Demo
 
-</td>
-</tr>
-</table>
-
-## 🖼️ Modern UI Features
-
-### 📱 **Interactive Windows**
-- **Floating Overlay Bar**: Compact command center with camera, mic, and skill selector
-- **Draggable Answer Window**: Move and resize AI response window anywhere
-- **Close Button**: Clean × button to close answer window when needed
-- **Auto-Hide Mic**: Microphone button appears only when Azure Speech is configured
-- **Interactive Chat**: Full conversation window with markdown support
-
-### 🎨 **Visual Design**
-- **Glass Morphism**: Beautiful blur effects and transparency
-- **Adaptive Layout**: UI adjusts based on available services
-- **Smart Resizing**: Windows resize automatically to fit content
-- **Professional Look**: Mimics system applications for perfect stealth
+https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 
 ---
 
-## 🎯 Functional Overview
+## What it does
 
-### 📋 **Core Components**
+| Capability | Details |
+|------------|---------|
+| **Vision (screenshots)** | Captures a display via Electron `desktopCapturer`, sends **PNG** to OpenAI with the active **skill prompt** (`processImageWithSkill`). No local OCR engine is required for the main path. |
+| **Text & chat** | OpenAI chat completions with streaming; conversation history and skill context from `prompt-loader.js`. |
+| **Speech (optional)** | **Google Cloud Speech-to-Text** streaming if `GOOGLE_SPEECH_KEY_FILE` points to a valid service-account JSON. Mic is used from the renderer; audio is sent to the main process. Recording stops with **Alt+R**; accumulated text is then sent to the LLM. |
+| **Skills** | Markdown prompts under `prompts/` define interviewer-style behavior per domain (see below). |
+| **Settings** | Configure API key and related options in the in-app **Settings** window (`Ctrl`+`,` / `Command`+`,`). |
 
-<table>
-<tr>
-<td width="33%">
-
-#### 🖱️ **Main Overlay**
-- Floating command bar
-- Screenshot capture (⌘⇧S)
-- Microphone toggle (Optional)
-- Skill selector (DSA)
-- Language picker
-- Status indicator
-
-</td>
-<td width="33%">
-
-#### 💬 **Interactive Chat**
-- Real-time transcription
-- AI conversation
-- Markdown formatting
-- Session memory
-- Listening animations
-- Auto-scroll messages
-
-</td>
-<td width="33%">
-
-#### 📊 **Answer Window**
-- Draggable interface
-- Close button (×)
-- Split layout for code
-- Full markdown support
-- Syntax highlighting
-- Smart content sizing
-
-</td>
-</tr>
-</table>
-
-
----
-## ✅ To-Do List & Development Status
-
-### 🎯 **Core Features** *(Completed)*
-
-- [x] **Stealth overlay** with draggable command bar and click‑through toggle
-- [x] **Screenshot capture** with direct Gemini analysis (no OCR step)
-- [x] **AI response window** with markdown and code highlighting
-- [x] **Global shortcuts** (capture, visibility, interaction, chat, settings)
-- [x] **Session memory** and chat UI
-- [x] **Language picker** and DSA skill prompt
-- [x] **Optional Azure Speech** integration with auto‑hide mic
-- [x] **Multi‑monitor** and area capture APIs
-- [x] **Window binding** and positioning system
-- [x] **Settings management** with app icon/stealth modes
-
-### 🚧 **Planned Features** *(In Development)*
-
-- [ ] **Hidden during screen share** (auto‑hide all windows while screen is being shared)
-- [ ] **Multi‑model support** (OpenAI/Anthropic/Local backends alongside Gemini)
-- [ ] **Auto‑typer for code snippets** (paste or simulate typing into editors/IDEs)
-- [ ] **Export conversation history** (save sessions as markdown/PDF)
-- [ ] **Performance optimizations** (faster startup, reduced memory usage)
-- [ ] **Enhanced stealth modes** (process name randomization, deeper OS integration)
+Default LLM settings live in `src/core/config.js` (e.g. model **`gpt-4o-mini`**, timeouts, generation parameters). Override behavior via code or future settings as exposed in the UI.
 
 ---
 
-### ⚙️ **Configuration**
+## Skill prompts (`prompts/`)
 
-The setup script automatically handles configuration. You only need:
+Each `.md` file is one skill (filename without extension = skill id):
+
+- `dsa` — data structures & algorithms  
+- `programming` — general programming  
+- `cloud-engineering` — default skill in app startup (`main.js`: `activeSkill`)  
+- `platform-engineering`  
+- `devops`  
+- `sre`  
+- `systems-engineering`  
+
+Programming language hints (e.g. C++, Python) are applied where the prompt loader supports them.
+
+---
+
+## Requirements
+
+- **Node.js** 18+ and npm  
+- **OpenAI API key** — required for LLM features (`OPENAI_API_KEY`)  
+- **Google Cloud Speech** — optional; service account JSON and Speech-to-Text API enabled for the project  
+
+---
+
+## Configuration
+
+1. Copy the example env file:
+
+   ```bash
+   cp env.example .env
+   ```
+
+   On Windows (PowerShell):
+
+   ```powershell
+   Copy-Item env.example .env
+   ```
+
+2. Edit **`.env`** in the project root:
+
+   | Variable | Required | Purpose |
+   |----------|----------|---------|
+   | `OPENAI_API_KEY` | **Yes** (for AI features) | OpenAI API key |
+   | `GOOGLE_SPEECH_KEY_FILE` | No | Absolute or project-relative path to Google **service account** JSON for Speech-to-Text |
+
+3. **Secrets**: Never commit `.env` or credential JSON. They are excluded from builds via `package.json` `build.files` (`!.env*`).
+
+> **Note:** If you use `setup.sh`, it may still mention legacy Gemini-oriented wording. For this fork, follow **`env.example`** and this README so `OPENAI_API_KEY` matches `src/services/llm.service.js`.
+
+---
+
+## Run from source
 
 ```bash
-# Required: Google Gemini API Key (setup script will ask for this)
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Optional: Azure Speech Recognition (add later if you want voice features)
-AZURE_SPEECH_KEY=your_azure_speech_key
-AZURE_SPEECH_REGION=your_region
+npm install
+npm start
 ```
 
-**Note**: Speech recognition is completely optional. If Azure credentials are not provided, the microphone button will be automatically hidden from all interfaces.
-
-## 🚀 Quick Start & Installation
-
-### ⚡ Three Simple Steps (All Operating Systems)
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/TechyCSR/OpenCluely.git
-   cd OpenCluely
-   ```
-
-2. **Get your Gemini API key** (Required)
-   - Visit [Google AI Studio](https://aistudio.google.com/)
-   - Click "Create API Key" 
-   - Copy the key (you'll need it in step 3)
-
-3. **Run the setup script** (One command does everything!)
-   ```bash
-   ./setup.sh
-   ```
-  
-
-**That's it!** The setup script will:
-- Install all dependencies automatically
-- Create and configure your `.env` file
-- Build the app (if needed)
-- Launch OpenCluely ready to use (if not works use npm install & then npm start)
-
-### 💻 Platform-Specific Notes
-
-- **Windows**: Use Git Bash (comes with Git for Windows), WSL, or any bash environment
-- **macOS/Linux**: Use your regular terminal
-- **All platforms**: No manual npm commands needed - the setup script handles everything
-
-### 🎛️ Setup Script Options
+Development helper (e.g. GPU flags on Linux):
 
 ```bash
-./setup.sh --build          # Build distributable for your OS
-./setup.sh --ci             # Use npm ci instead of npm install
-./setup.sh --no-run         # Setup only, don't launch the app
-./setup.sh --install-system-deps  # Install sox for microphone (optional)
+npm run dev
 ```
 
-### 🔧 **Optional: Azure Speech Setup** (For Voice Features)
-
-Voice recognition is completely optional. The setup script will create a `.env` file with just the required Gemini key. To add voice features:
-
-1. Get Azure Speech credentials:
-   - Visit [Azure Portal](https://portal.azure.com/)
-   - Create a Speech Service
-   - Copy your key and region
-
-2. Add to your `.env` file:
-   ```env
-   # Already configured by setup script
-   GEMINI_API_KEY=your_gemini_api_key_here
-
-   # Add these for voice features (optional)
-   AZURE_SPEECH_KEY=your_azure_speech_key
-   AZURE_SPEECH_REGION=your_region
-   ```
-
-3. Restart the app - microphone buttons will now appear automatically
-
-## 🎮 How to Use
-
-### 🖱️ **Main Controls**
-
-| Action | Shortcut | Description |
-|--------|----------|-------------|
-| **Screenshot Capture** | `⌘⇧S` | Capture screen and analyze via Gemini (image understanding) |
-| **Toggle Speech** | `Alt+R` | Start/stop voice recognition (if configured) |
-| **Toggle Visibility** | `⌘⇧V` | Show/hide all windows |
-| **Toggle Interaction** | `⌘⇧I` or `Alt+A` | Enable/disable window interaction |
-| **Switch to Chat** | `⌘⇧C` | Open interactive chat window |
-| **Settings** | `⌘,` | Open settings panel |
-
-### 🎯 **Workflow**
-
-1. **Start OpenCluely** → App appears as system process (Terminal/Activity Monitor)
-2. **Position Windows** → Drag overlay and answer windows to preferred locations
-3. **Capture Questions** → Use screenshot (⌘⇧S) or voice commands
-4. **Get AI Answers** → Instant responses in draggable answer window
-5. **Interactive Chat** → Type or speak for detailed conversations
-6. **Stay Stealth** → All operations invisible to screen recording
-
-### 🔧 **Advanced Features**
-
-#### 🎨 **Window Management**
-- **Draggable Interface**: Click and drag any window to reposition
-- **Auto-resize**: Windows automatically adjust to content
-- **Close Button**: Click × to close answer window
-- **Always on Top**: Windows stay above all applications
-
-#### 🧠 **AI Intelligence**
-- **Context Awareness**: Remembers entire conversation
-- **Code Detection**: Automatically formats code blocks
-- **Language Specific**: Tailored responses for selected programming language
-- **Session Memory**: Maintains context across multiple questions
- - **Image Understanding**: DSA prompt is applied only for new image-based queries; chat messages don’t include the full prompt
- - **Multi-monitor & Area Capture**: Programmatic APIs allow targeting a display and optional rectangular crop for focused analysis
-
-#### 🔊 **Optional Voice Features** (Azure Speech)
-- **Real-time Transcription**: Speak questions naturally
-- **Listening Animation**: Visual feedback during recording
-- **Interim Results**: See transcription as you speak
-- **Auto-processing**: Instant AI responses to voice input
-]
----
-
-<details markdown="1">
-<summary>🧩 <b> Troubleshooting</summary>
-
-### Setup Issues
-
-- **setup.sh not found or won't run**
-  - Make sure you're in the OpenCluely directory: `cd OpenCluely`
-  - Make the script executable: `chmod +x setup.sh`
-  - On Windows, use Git Bash (comes with Git for Windows)
-
-- **Setup script stops with exit code 130**
-  - This means you pressed Ctrl+C. Just run `./setup.sh` again
-
-- **Node or npm not found**
-  - Install Node.js 18+ from [nodejs.org](https://nodejs.org/)
-  - Restart your terminal and try again
-
-### App Issues
-
-- **Electron won't start or shows blank window (Linux)**
-  - Try: `npm run dev`
-  - Ensure X11/XWayland is available if running in headless environments
-
-- **macOS screen capture doesn't work**
-  - Grant "Screen Recording" permission in System Settings → Privacy & Security → Screen Recording
-  - Quit and relaunch the app after granting permission
-
-- **Windows SmartScreen blocks the app**
-  - Click "More info" → "Run anyway" or use `npm start` during development
-
-- **Microphone/voice not working**
-  - Voice is optional - ignore related warnings if you don't need it
-  - To enable: install `sox` (Linux/macOS) and add Azure keys to `.env`
-
-</details>
-
-<details markdown="2">
-<summary>⚖️ Legal & Ethics</summary>
-
-### 📋 **Disclaimer**
-
-OpenCluely is provided for educational and research purposes. Users are responsible for:
-- Complying with interview guidelines
-- Respecting company policies
-- Understanding legal implications
-- Using ethically and responsibly
-
-### 🔒 **Privacy**
-
-- No data collection or telemetry
-- All processing happens locally
-- API communications are encrypted
-- Session data stays on your device
-
-
-### 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-
-</details>
-
-
-</b>
-
-## 🙏 Acknowledgments
-
-- **Google Gemini**: Powering AI intelligence
-- **Azure Speech**: Optional voice recognition
-- **Electron**: Cross-platform desktop framework
-- **Community**: Amazing contributors and feedback
-
-- **Vysper**: UI and code structure inspiration — see [Vysper by varun-singhh](https://github.com/varun-singhh/Vysper)
+Optional: `./setup.sh` installs dependencies and can create a `.env` — verify keys match OpenAI + Google Speech as above.
 
 ---
+
+## Keyboard shortcuts (global)
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl`+`Shift`+`S` / `Cmd`+`Shift`+`S` | Trigger screenshot → vision / LLM pipeline |
+| `Ctrl`+`Shift`+`V` / `Cmd`+`Shift`+`V` | Toggle window visibility |
+| `Ctrl`+`Shift`+`I` / `Cmd`+`Shift`+`I` | Toggle interaction mode |
+| `Ctrl`+`Shift`+`C` / `Cmd`+`Shift`+`C` | Switch to Chat window |
+| `Ctrl`+`Shift`+`\` / `Cmd`+`Shift`+`\` | Clear session memory |
+| `Ctrl`+`,` / `Cmd`+`,` | Open Settings |
+| `Alt`+`A` | Toggle interaction |
+| `Alt`+`R` | Start/stop speech recording (if speech is configured) |
+| `Ctrl`+`Shift`+`T` / `Cmd`+`Shift`+`T` | Force always-on-top for windows |
+| `Ctrl`+`Shift`+`Alt`+`T` | Debug always-on-top test (logged) |
+| `Ctrl`+`↑` `↓` `←` `→` | Context-sensitive navigation (see `main.js`) |
+
+Exact behavior may vary slightly by OS; Electron registers **global** shortcuts.
+
+---
+
+## Build distributables
+
+Uses [electron-builder](https://www.electron.build/). Examples:
+
+```bash
+npm run build:win
+npm run build:mac
+npm run build:linux
+npm run build:all
+```
+
+Output goes to `dist/` per `package.json` `build.directories.output`.
+
+---
+
+## Project layout (high level)
+
+| Path | Role |
+|------|------|
+| `main.js` | App lifecycle, IPC, shortcuts, orchestration |
+| `preload.js` | Secure bridge to renderer |
+| `src/services/llm.service.js` | OpenAI chat + vision + streaming |
+| `src/services/speech.service.js` | Google Cloud Speech streaming |
+| `src/services/capture.service.js` | Screen capture → PNG buffer |
+| `src/managers/window.manager.js` | Multi-window layout |
+| `prompt-loader.js` | Loads `prompts/*.md` |
+
+---
+
+## Troubleshooting
+
+- **Blank window / Electron issues (Linux):** try `npm run dev`; ensure a display server is available.  
+- **OpenAI errors:** confirm `OPENAI_API_KEY` in `.env`, billing, and model access for `gpt-4o-mini` (or change model in `src/core/config.js`).  
+- **Speech disabled:** without `GOOGLE_SPEECH_KEY_FILE` or a valid JSON path, the mic path stays off — this is expected.  
+- **macOS screen capture:** grant **Screen Recording** for the app in **System Settings → Privacy & Security**.  
+- **Windows SmartScreen:** use development `npm start` or sign built binaries for distribution.  
+
+---
+
+## Privacy & ethics
+
+- **API traffic:** Requests to OpenAI (and Google, if speech is enabled) go over the network; review their terms and your org’s policy.  
+- **Local data:** Session behavior is managed in-app; see code for persistence details.  
+- **Responsible use:** Do not use to violate interview rules, assessments, or laws.
+
+---
+
+## License
+
+This project is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE).
+
+---
+
+## Acknowledgments
+
+- [OpenAI](https://openai.com/) — LLM APIs  
+- [Google Cloud Speech-to-Text](https://cloud.google.com/speech-to-text) — optional transcription  
+- [Electron](https://www.electronjs.org/) — desktop shell  
+
+Upstream lineage and inspiration are credited in prior forks (e.g. community contributions and related interview-assistant projects).
+
+---
+
 <div align="center">
 
+If this project helped you, consider starring the repo.
 
-
-⭐ **Star this repo** if OpenCluely helped you ace your interviews or you vibed with it!
-
-**Made with ❤️ by [TechyCSR](https://techycsr.dev)**
-
+**AgentSami** — AI problem-solving assistant
 
 </div>

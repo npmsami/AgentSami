@@ -1,5 +1,6 @@
 node_modules/
 .env
+cred/
 eng.traineddata
 dist/
 .DS_Store

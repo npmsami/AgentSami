@@ -17,14 +17,16 @@ const sessionManager = require("./src/managers/session.manager");
 class ApplicationController {
   constructor() {
     this.isReady = false;
-    this.activeSkill = "dsa";
-  // Default to C++ so language is enforced from first run
-  this.codingLanguage = "cpp";
+    this.activeSkill = "cloud-engineering";
+    this.codingLanguage = "cpp";
     this.speechAvailable = false;
+    // Buffer that accumulates all final transcriptions while recording is active.
+    // The LLM is only called when the user stops recording (Alt+R), not on each sentence.
+    this.transcriptionBuffer = [];
 
     // Window configurations for reference
     this.windowConfigs = {
-      main: { title: "OpenCluely" },
+      main: { title: "AgentSami" },
       chat: { title: "Chat" },
       llmResponse: { title: "AI Response" },
       settings: { title: "Settings" },
@@ -129,11 +131,20 @@ class ApplicationController {
   }
 
   setupPermissions() {
+    // Pre-flight check — must return true or getUserMedia is blocked before even asking
+    session.defaultSession.setPermissionCheckHandler(
+      (webContents, permission) => {
+        // Allow all media + screen capture permissions needed for mic and system audio
+        const allowed = ["microphone", "camera", "display-capture", "media", "mediaKeySystem", "screen", "desktop-capture"];
+        return allowed.includes(permission);
+      }
+    );
+
+    // Actual permission grant callback
     session.defaultSession.setPermissionRequestHandler(
       (webContents, permission, callback) => {
-        const allowedPermissions = ["microphone", "camera", "display-capture"];
+        const allowedPermissions = ["microphone", "camera", "display-capture", "media", "mediaKeySystem", "screen", "desktop-capture"];
         const granted = allowedPermissions.includes(permission);
-
         logger.debug("Permission request", { permission, granted });
         callback(granted);
       }
@@ -181,34 +192,62 @@ class ApplicationController {
       });
     });
 
-    speechService.on("transcription", (text) => {      
-      // Add transcription to session memory
-      sessionManager.addUserInput(text, 'speech');
-      
-      const windows = BrowserWindow.getAllWindows();
-      
-      windows.forEach((window) => {
-        window.webContents.send("transcription-received", { text });
+    speechService.on("transcription", (text) => {
+      if (!text || !text.trim()) return;
+
+      // Accumulate sentences while recording — do NOT call the LLM yet.
+      // The LLM is triggered only when the user stops recording (Alt+R).
+      this.transcriptionBuffer.push(text.trim());
+      logger.info("Transcription buffered (waiting for recording stop)", {
+        sentence: text.trim().substring(0, 80),
+        bufferedCount: this.transcriptionBuffer.length
       });
-      
-      // Automatically process transcription with LLM for intelligent response
-      setTimeout(async () => {
-        try {
-          const sessionHistory = sessionManager.getOptimizedHistory();
-          await this.processTranscriptionWithLLM(text, sessionHistory);
-        } catch (error) {
-          logger.error("Failed to process transcription with LLM", {
-            error: error.message,
-            text: text.substring(0, 100)
-          });
-        }
-      }, 500);
+
+      // Show each sentence in the chat as it arrives so the user sees live captions
+      BrowserWindow.getAllWindows().forEach((win) => {
+        win.webContents.send("transcription-received", { text });
+      });
     });
 
     speechService.on("interim-transcription", (text) => {
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send("interim-transcription", { text });
       });
+    });
+
+    // Renderer process captures the mic via Web Audio API and sends chunks here
+    speechService.on("start-mic-capture", () => {
+      BrowserWindow.getAllWindows().forEach((window) => {
+        window.webContents.send("recording-command", { command: "start" });
+      });
+      logger.info("Sent recording-command:start to all renderer windows");
+    });
+
+    // On stream restart, tell renderer to stop mic before the new stream starts
+    speechService.on("stop-mic-capture", () => {
+      BrowserWindow.getAllWindows().forEach((window) => {
+        window.webContents.send("recording-command", { command: "stop" });
+      });
+      logger.info("Sent recording-command:stop to all renderer windows (stream restart)");
+    });
+
+    ipcMain.on("audio-chunk", (event, chunk) => {
+      try {
+        if (chunk) speechService.feedAudioChunk(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      } catch (error) {
+        logger.warn("Failed to feed audio chunk to speech service", { error: error.message });
+      }
+    });
+
+    // Renderer tells us the actual AudioContext sample rate before sending audio
+    ipcMain.handle("set-audio-sample-rate", (event, rate) => {
+      try {
+        speechService.restartStreamWithSampleRate(parseInt(rate, 10));
+        logger.info("Audio sample rate updated from renderer", { rate });
+      } catch (error) {
+        logger.warn("Failed to update sample rate", { error: error.message });
+      }
+      return "ok";
     });
 
     speechService.on("status", (status) => {
@@ -232,6 +271,21 @@ class ApplicationController {
   }
 
   setupIPCHandlers() {
+  // Return screen sources for system audio capture in renderer via getUserMedia
+  ipcMain.handle("get-desktop-sources", async () => {
+    try {
+      const { desktopCapturer } = require("electron");
+      const sources = await desktopCapturer.getSources({
+        types: ["screen"],
+        fetchWindowIcons: false,
+      });
+      return sources.map((s) => ({ id: s.id, name: s.name }));
+    } catch (err) {
+      logger.error("Failed to get desktop sources", { error: err.message });
+      return [];
+    }
+  });
+
   ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
   ipcMain.handle("list-displays", () => captureService.listDisplays());
   ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
@@ -253,22 +307,28 @@ class ApplicationController {
     });
 
     ipcMain.handle("start-speech-recognition", () => {
+      this.transcriptionBuffer = [];
       speechService.startRecording();
+      windowManager.showChatWindow();
       return speechService.getStatus();
     });
 
     ipcMain.handle("stop-speech-recognition", () => {
       speechService.stopRecording();
+      this._flushTranscriptionBuffer();
       return speechService.getStatus();
     });
 
     // Also handle direct send events for fallback
     ipcMain.on("start-speech-recognition", () => {
+      this.transcriptionBuffer = [];
       speechService.startRecording();
+      windowManager.showChatWindow();
     });
 
     ipcMain.on("stop-speech-recognition", () => {
       speechService.stopRecording();
+      this._flushTranscriptionBuffer();
     });
 
     ipcMain.on("chat-window-ready", () => {
@@ -319,9 +379,8 @@ class ApplicationController {
     ipcMain.handle("resize-window", (event, { width, height }) => {
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow) {
-        // Enforce horizontal constraints: min ~one icon, max original width
-        const minW = 60;
-        const maxW = windowManager.windowConfigs?.main?.width || 520;
+        const minW = windowManager.windowConfigs?.main?.width || 216;
+        const maxW = minW;
         const clampedWidth = Math.max(minW, Math.min(maxW, Math.round(width || minW)));
         try {
           // Match content size to the DOM so no extra transparent area remains
@@ -373,23 +432,69 @@ class ApplicationController {
     });
 
     ipcMain.handle("send-chat-message", async (event, text) => {
-      // Add chat message to session memory
-      sessionManager.addUserInput(text, 'chat');
-      logger.debug('Chat message added to session memory', { textLength: text.length });
-      
-      // Process typed message with LLM in the same way as transcribed text
-      setTimeout(async () => {
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return { success: false, error: 'Empty message' };
+      }
+      const cleanText = text.trim();
+
+      // Add to session memory
+      sessionManager.addUserInput(cleanText, 'chat');
+      logger.info('Processing typed chat message with LLM', { textLength: cleanText.length });
+
+      // Send "thinking" signal immediately so UI shows indicator
+      event.sender.send('chat-thinking');
+
+      // Process with LLM asynchronously — respond directly to the sending window
+      (async () => {
         try {
           const sessionHistory = sessionManager.getOptimizedHistory();
-          await this.processTranscriptionWithLLM(text, sessionHistory);
-        } catch (error) {
-          logger.error("Failed to process chat message with LLM", {
-            error: error.message,
-            text: text.substring(0, 100)
+          const needsProgrammingLanguage = false;
+
+          const llmResult = await llmService.processTranscriptionWithIntelligentResponse(
+            cleanText,
+            this.activeSkill,
+            sessionHistory.recent || [],
+            needsProgrammingLanguage ? this.codingLanguage : null,
+            (chunk) => {
+              // Stream chunks directly to the chat window that asked
+              if (!event.sender.isDestroyed()) {
+                event.sender.send('llm-stream-chunk', { chunk });
+              }
+            }
+          );
+
+          sessionManager.addModelResponse(llmResult.response, {
+            skill: this.activeSkill,
+            processingTime: llmResult.metadata.processingTime,
+            isTypedChat: true
           });
+
+          logger.info('Chat message LLM response completed', {
+            responseLength: llmResult.response.length,
+            skill: this.activeSkill
+          });
+
+          // Send full rendered response back to the chat window
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('transcription-llm-response', {
+              response: llmResult.response,
+              metadata: llmResult.metadata,
+              skill: this.activeSkill,
+              isTypedChat: true
+            });
+          }
+        } catch (error) {
+          logger.error('Chat message LLM failed', { error: error.message, text: cleanText.substring(0, 100) });
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('transcription-llm-response', {
+              response: `Sorry, I couldn't process that: ${error.message}`,
+              metadata: { usedFallback: true },
+              skill: this.activeSkill
+            });
+          }
         }
-      }, 500);
-      
+      })();
+
       return { success: true };
     });
 
@@ -404,12 +509,12 @@ class ApplicationController {
       }
     });
 
-    ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
+    ipcMain.handle("set-openai-api-key", (event, apiKey) => {
       llmService.updateApiKey(apiKey);
       return llmService.getStats();
     });
 
-    ipcMain.handle("get-gemini-status", () => {
+    ipcMain.handle("get-openai-status", () => {
       return llmService.getStats();
     });
 
@@ -439,11 +544,11 @@ class ApplicationController {
       return windowManager.getWindowBindingStatus();
     });
 
-    ipcMain.handle("test-gemini-connection", async () => {
+    ipcMain.handle("test-openai-connection", async () => {
       return await llmService.testConnection();
     });
 
-    ipcMain.handle("run-gemini-diagnostics", async () => {
+    ipcMain.handle("run-openai-diagnostics", async () => {
       try {
         const connectivity = await llmService.checkNetworkConnectivity();
         const apiTest = await llmService.testConnection();
@@ -492,9 +597,12 @@ class ApplicationController {
     });
 
     ipcMain.handle("update-active-skill", (event, skill) => {
+      const previous = this.activeSkill;
       this.activeSkill = skill;
+      sessionManager.setActiveSkill(skill);
       windowManager.broadcastToAllWindows("skill-changed", { skill });
-      return { success: true };
+      logger.info("Active skill updated via IPC", { from: previous, to: skill });
+      return { success: true, activeSkill: this.activeSkill };
     });
 
     ipcMain.handle("restart-app-for-stealth", () => {
@@ -601,12 +709,16 @@ class ApplicationController {
     if (currentStatus.isRecording) {
       try {
         speechService.stopRecording();
-        windowManager.hideChatWindow();
         logger.info("Speech recognition stopped via global shortcut");
+
+        // Take everything the user said and send it to the LLM as one request
+        this._flushTranscriptionBuffer();
       } catch (error) {
         logger.error("Error stopping speech recognition:", error);
       }
     } else {
+      // Clear any leftover buffer from a previous session
+      this.transcriptionBuffer = [];
       try {
         speechService.startRecording();
         windowManager.showChatWindow();
@@ -615,6 +727,44 @@ class ApplicationController {
         logger.error("Error starting speech recognition:", error);
       }
     }
+  }
+
+  // Called when recording stops — joins all buffered sentences and calls the LLM once.
+  _flushTranscriptionBuffer() {
+    const fullText = this.transcriptionBuffer.join(' ').trim();
+    this.transcriptionBuffer = [];
+
+    if (!fullText) {
+      logger.info("No transcription to process after recording stopped (empty buffer)");
+      windowManager.hideChatWindow();
+      return;
+    }
+
+    logger.info("Flushing transcription buffer to LLM", {
+      totalLength: fullText.length,
+      preview: fullText.substring(0, 120)
+    });
+
+    // Keep the chat window visible so the user sees the response
+    windowManager.showChatWindow();
+
+    // Signal the chat window that the LLM is working
+    windowManager.broadcastToAllWindows("chat-thinking");
+
+    // Add the combined text to session memory as a single user turn
+    sessionManager.addUserInput(fullText, 'speech');
+
+    (async () => {
+      try {
+        const sessionHistory = sessionManager.getOptimizedHistory();
+        await this.processTranscriptionWithLLM(fullText, sessionHistory);
+      } catch (error) {
+        logger.error("Failed to process buffered transcription with LLM", {
+          error: error.message,
+          textPreview: fullText.substring(0, 100)
+        });
+      }
+    })();
   }
 
   clearSessionMemory() {
@@ -673,7 +823,26 @@ class ApplicationController {
 
   navigateSkill(direction) {
     const availableSkills = [
-      "dsa",
+      "cloud-engineering",
+      "sre",
+      "platform-engineering",
+      "infrastructure-engineering",
+      "devops-engineering",
+      "devsecops-engineering",
+      "cicd-engineering",
+      "release-engineering",
+      "build-engineering",
+      "automation-engineering",
+      "iac-engineering",
+      "kubernetes-engineering",
+      "observability-engineering",
+      "monitoring-engineering",
+      "cloud-security-engineering",
+      "systems-engineering",
+      "network-engineering",
+      "performance-engineering",
+      "reliability-engineering",
+      "operations-engineering",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);
@@ -731,7 +900,7 @@ class ApplicationController {
       // Use image directly with LLM and active skill; do not send chat messages here
       const sessionHistory = sessionManager.getOptimizedHistory();
 
-      const skillsRequiringProgrammingLanguage = ['dsa'];
+      const skillsRequiringProgrammingLanguage = [];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
 
       const llmResult = await llmService.processImageWithSkill(
@@ -739,7 +908,8 @@ class ApplicationController {
         capture.mimeType || 'image/png',
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null
+        needsProgrammingLanguage ? this.codingLanguage : null,
+        (chunk) => windowManager.broadcastToAllWindows('llm-stream-chunk', { chunk })
       );
 
       // Record model response in session
@@ -784,14 +954,15 @@ class ApplicationController {
       sessionManager.addUserInput(text, 'llm_input');
 
       // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
+      const skillsRequiringProgrammingLanguage = [];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
       
       const llmResult = await llmService.processTextWithSkill(
         text,
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null
+        needsProgrammingLanguage ? this.codingLanguage : null,
+        (chunk) => windowManager.broadcastToAllWindows('llm-stream-chunk', { chunk })
       );
 
       logger.info("LLM processing completed, showing response", {
@@ -849,12 +1020,6 @@ class ApplicationController {
       }
 
       const cleanText = text.trim();
-      if (cleanText.length < 2) {
-        logger.debug("Skipping LLM processing for very short transcription", {
-          text: cleanText
-        });
-        return;
-      }
 
       logger.info("Processing transcription with intelligent LLM response", {
         skill: this.activeSkill,
@@ -863,14 +1028,15 @@ class ApplicationController {
       });
 
       // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
+      const skillsRequiringProgrammingLanguage = [];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
 
       const llmResult = await llmService.processTranscriptionWithIntelligentResponse(
         cleanText,
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null
+        needsProgrammingLanguage ? this.codingLanguage : null,
+        (chunk) => windowManager.broadcastToAllWindows('llm-stream-chunk', { chunk })
       );
 
       // Add LLM response to session memory
@@ -932,6 +1098,22 @@ class ApplicationController {
             skill: this.activeSkill
           }
         });
+
+        // As a last resort, notify the chat UI so the spinner stops
+        try {
+          windowManager.broadcastToAllWindows("transcription-llm-response", {
+            response: "Sorry, I couldn't process your spoken question due to an internal error. Please try again or type your question.",
+            metadata: {
+              error: error.message,
+              fallbackError: fallbackError.message,
+              isError: true
+            },
+            skill: this.activeSkill,
+            isTranscriptionResponse: true
+          });
+        } catch (_) {
+          // Ignore UI broadcast failures
+        }
       }
     }
   }
@@ -988,6 +1170,8 @@ class ApplicationController {
       responsePreview: llmResult.response.substring(0, 100) + "..."
     });
 
+    // Make sure the chat window is visible so the user sees the answer
+    windowManager.showChatWindow();
     windowManager.broadcastToAllWindows("transcription-llm-response", broadcastData);
   }
 
@@ -1032,11 +1216,11 @@ class ApplicationController {
   getSettings() {
     return {
       codingLanguage: this.codingLanguage || "cpp", // Default to C++
-      activeSkill: this.activeSkill || "dsa",
+      activeSkill: this.activeSkill || "cloud-engineering",
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
       // pass through env-derived settings for UI convenience (masked)
-      azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
+      speechConfigured: !!process.env.GOOGLE_SPEECH_KEY_FILE,
       speechAvailable: this.speechAvailable
     };
   }
@@ -1067,6 +1251,16 @@ class ApplicationController {
         this.appIcon = settings.selectedIcon;
         // Immediately update the app icon
         this.updateAppIcon(settings.selectedIcon);
+      }
+
+      // Update OpenAI API key if provided
+      if (settings.openaiKey && settings.openaiKey.trim()) {
+        llmService.updateApiKey(settings.openaiKey.trim());
+      }
+
+      // Update Google Speech key file if provided
+      if (settings.googleSpeechKeyFile && settings.googleSpeechKeyFile.trim()) {
+        speechService.updateKeyFile(settings.googleSpeechKeyFile.trim());
       }
 
       // Persist settings to file or config

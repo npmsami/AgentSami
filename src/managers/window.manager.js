@@ -32,11 +32,11 @@ class WindowManager {
     
     this.windowConfigs = {
       main: {
-        width: 520,
-        height: 35,
+        width: 216,
+        height: 240,
         useContentSize: true,
         file: 'index.html',
-        title: 'OpenCluely'
+        title: 'AgentSami'
       },
       chat: {
         width: 500,
@@ -207,7 +207,9 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         backgroundThrottling: false,
-        devTools: true, // Enable DevTools for debugging
+        devTools: true,
+        // Required for getUserMedia with chromeMediaSource:'desktop' (system audio capture)
+        enableBlinkFeatures: 'GetUserMedia',
       },
       show: false, // Never show during creation, use showOnCurrentDesktop instead
       title: windowConfig.title,
@@ -254,10 +256,8 @@ class WindowManager {
         titleBarOverlay: false,
         transparent: true,
         backgroundColor: '#00000000',
-  // Allow resizing so users can adjust width; we will lock height in handlers
-  resizable: true,
-    // Keep the original max width as cap; allow small min width so it can collapse to one icon
-    minWidth: 60,
+  resizable: false,
+    minWidth: this.windowConfigs.main.width,
     maxWidth: this.windowConfigs.main.width,
         minimizable: false,
         maximizable: false,
@@ -372,41 +372,9 @@ class WindowManager {
       window.setIgnoreMouseEvents(true, { forward: true });
     }
 
-    // Horizontal-only resize behavior for main overlay window
+    // Fixed-size panel — no resize needed; just keep bound windows aligned
     if (type === 'main') {
       try {
-        // Small practical minimum width so it can collapse to roughly one icon width
-        // Height is managed dynamically; don't lock here to allow programmatic changes
-        if (typeof window.setMinimumSize === 'function') {
-          // Set a conservative minimum width; height will be adjusted via IPC as needed
-          window.setMinimumSize(60, windowConfig.height);
-        }
-
-        // Intercept user-initiated resizes to lock height and allow width changes only
-        window.on('will-resize', (event, newBounds) => {
-          try {
-            // Keep current content height; only apply the new width
-            const [_, currentContentHeight] = window.getContentSize();
-            event.preventDefault();
-            // Enforce width within min/max bounds
-            const minW = 60;
-            const maxW = this.windowConfigs.main.width;
-            const desiredW = Math.max(minW, Math.min(maxW, Math.round(newBounds.width || minW)));
-            window.setContentSize(desiredW, Math.max(1, currentContentHeight));
-          } catch (e) {
-            // Fallback: lock window height using window size
-            try {
-              const [__w, currentWindowHeight] = window.getSize();
-              event.preventDefault();
-              const minW = 60;
-              const maxW = this.windowConfigs.main.width;
-              const desiredW = Math.max(minW, Math.min(maxW, Math.round(newBounds.width || minW)));
-              window.setSize(desiredW, Math.max(1, currentWindowHeight));
-            } catch { /* noop */ }
-          }
-        });
-
-        // When resized (by user or programmatically), keep bound windows aligned at top
         window.on('resize', () => {
           if (this.bindWindows) {
             this.positionBoundWindows();

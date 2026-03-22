@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# OpenCluely one-shot setup: install deps, (optionally) build, and run
+# AgentSami one-shot setup: install deps, (optionally) build, and run
 # Works on macOS, Linux, and Windows (Git Bash / MSYS2 / Cygwin)
 
 # Defaults
@@ -14,7 +14,7 @@ PLATFORM_BUILD_SCRIPT="build"
 
 print_header() {
   echo "========================================"
-  echo " OpenCluely Setup"
+  echo " AgentSami Setup"
   echo "========================================"
 }
 
@@ -27,7 +27,7 @@ This script will:
 2. Create .env file (if needed) 
 3. Guide you to add your Gemini API key
 4. Optionally build the app
-5. Start OpenCluely
+5. Start AgentSami
 
 Options:
   --build                 Build a distributable for this OS (electron-builder)
@@ -173,7 +173,7 @@ if [[ "$ENV_NEEDS_CONFIG" -eq 1 ]] || grep -q "your_gemini_api_key_here" .env 2>
   echo " ⚠️  API KEY REQUIRED"
   echo "=========================================="
   echo ""
-  echo "OpenCluely needs a Google Gemini API key to work."
+  echo "AgentSami needs a Google Gemini API key to work."
   echo ""
   echo "Steps to get your API key:"
   echo "1. Visit: https://aistudio.google.com/"

@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings</title>
     <link href="./src/styles/common.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- Font Awesome — local copy, works offline and in Electron -->
+    <link rel="stylesheet" href="./node_modules/@fortawesome/fontawesome-free/css/all.min.css" />
     <style>
         * {
             margin: 0;
@@ -278,30 +279,36 @@
         <div class="settings-content">
             <div class="settings-section">
                 <div class="settings-section-title">
-                    <i class="fas fa-code"></i>
-                    Language & Skills
+                    <i class="fas fa-layer-group"></i>
+                    Active Skill
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Coding Language</div>
-                            <div class="settings-item-description">Select your preferred programming language</div>
-                        </div>
-                        <select class="input-field" id="codingLanguage">
-                            <option value="cpp">C++</option>
-                            <option value="c">C</option>
-                            <option value="python">Python</option>
-                            <option value="java">Java</option>
-                            <option value="javascript">JavaScript</option>
-                        </select>
-                    </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-item-label">Active Skill</div>
-                            <div class="settings-item-description">Choose your current focus area</div>
+                            <div class="settings-item-label">Interview Focus</div>
+                            <div class="settings-item-description">Choose the engineering domain for your interview session</div>
                         </div>
                         <select class="input-field" id="activeSkill">
-                            <option value="dsa">Data Structures & Algorithms</option>
+                            <option value="cloud-engineering">Cloud Engineering</option>
+                            <option value="sre">Site Reliability Engineering (SRE)</option>
+                            <option value="platform-engineering">Platform Engineering</option>
+                            <option value="infrastructure-engineering">Infrastructure Engineering</option>
+                            <option value="devops-engineering">DevOps Engineering</option>
+                            <option value="devsecops-engineering">DevSecOps Engineering</option>
+                            <option value="cicd-engineering">CI/CD Engineering</option>
+                            <option value="release-engineering">Release Engineering</option>
+                            <option value="build-engineering">Build Engineering</option>
+                            <option value="automation-engineering">Automation Engineering</option>
+                            <option value="iac-engineering">Infrastructure as Code (IaC)</option>
+                            <option value="kubernetes-engineering">Kubernetes / Container Platform</option>
+                            <option value="observability-engineering">Observability Engineering</option>
+                            <option value="monitoring-engineering">Monitoring &amp; Logging Engineering</option>
+                            <option value="cloud-security-engineering">Cloud Security Engineering</option>
+                            <option value="systems-engineering">Systems Engineering</option>
+                            <option value="network-engineering">Network Engineering (Cloud Networking)</option>
+                            <option value="performance-engineering">Performance Engineering</option>
+                            <option value="reliability-engineering">Reliability Engineering</option>
+                            <option value="operations-engineering">Operations Engineering</option>
                         </select>
                     </div>
                 </div>
@@ -338,17 +345,10 @@
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Azure Speech Key</div>
-                            <div class="settings-item-description">Your Azure Cognitive Services API key</div>
+                            <div class="settings-item-label">Google Credentials JSON</div>
+                            <div class="settings-item-description">Full path to your Google service account JSON key file</div>
                         </div>
-                        <input type="password" class="input-field" id="azureKey" placeholder="Enter your Azure key">
-                    </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-item-label">Azure Region</div>
-                            <div class="settings-item-description">Your Azure service region</div>
-                        </div>
-                        <input type="text" class="input-field" id="azureRegion" placeholder="e.g. eastus">
+                        <input type="text" class="input-field" id="googleSpeechKeyFile" placeholder="C:\path\to\credentials.json">
                     </div>
                 </div>
             </div>
@@ -356,15 +356,15 @@
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
-                    Gemini Settings
+                    OpenAI Settings
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">OpenAI API Key</div>
+                            <div class="settings-item-description">Your OpenAI API key (sk-...)</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <input type="password" class="input-field" id="openaiKey" placeholder="Enter your OpenAI API key">
                     </div>
                 </div>
             </div>

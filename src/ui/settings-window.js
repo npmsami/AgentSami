@@ -2,11 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Get DOM elements
     const closeButton = document.getElementById('closeButton');
     const quitButton = document.getElementById('quitButton');
-    const azureKeyInput = document.getElementById('azureKey');
-    const azureRegionInput = document.getElementById('azureRegion');
-    const geminiKeyInput = document.getElementById('geminiKey');
+    const googleSpeechKeyFileInput = document.getElementById('googleSpeechKeyFile');
+    const openaiKeyInput = document.getElementById('openaiKey');
     const windowGapInput = document.getElementById('windowGap');
-    const codingLanguageSelect = document.getElementById('codingLanguage');
+    const codingLanguageSelect = null; // removed – no longer in settings UI
     const activeSkillSelect = document.getElementById('activeSkill');
     const iconGrid = document.getElementById('iconGrid');
 
@@ -62,17 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to load settings into UI
     const loadSettingsIntoUI = (settings) => {
-        if (settings.azureKey && azureKeyInput) azureKeyInput.value = settings.azureKey;
-        if (settings.azureRegion && azureRegionInput) azureRegionInput.value = settings.azureRegion;
-        if (settings.geminiKey && geminiKeyInput) geminiKeyInput.value = settings.geminiKey;
+        if (settings.googleSpeechKeyFile && googleSpeechKeyFileInput) googleSpeechKeyFileInput.value = settings.googleSpeechKeyFile;
+        if (settings.openaiKey && openaiKeyInput) openaiKeyInput.value = settings.openaiKey;
         if (settings.windowGap && windowGapInput) windowGapInput.value = settings.windowGap;
         
-        // Set C++ as default if no coding language is specified
-        if (codingLanguageSelect) {
-            codingLanguageSelect.value = settings.codingLanguage || 'cpp';
-        }
-        
-        if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
+        if (activeSkillSelect) activeSkillSelect.value = settings.activeSkill || 'cloud-engineering';
         
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
@@ -111,9 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save settings helper function
     const saveSettings = () => {
         const settings = {};
-        if (azureKeyInput) settings.azureKey = azureKeyInput.value;
-        if (azureRegionInput) settings.azureRegion = azureRegionInput.value;
-        if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (googleSpeechKeyFileInput) settings.googleSpeechKeyFile = googleSpeechKeyFileInput.value;
+        if (openaiKeyInput) settings.openaiKey = openaiKeyInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
@@ -123,9 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add event listeners for all inputs
     const inputs = [
-        azureKeyInput,
-        azureRegionInput,
-        geminiKeyInput,
+        googleSpeechKeyFileInput,
+        openaiKeyInput,
         windowGapInput
     ];
 

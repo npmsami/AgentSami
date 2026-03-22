@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <title>Chat</title>
     <link href="./src/styles/common.css" rel="stylesheet" />
-    <!-- Load Font Awesome via link instead of @import to avoid any raw CSS render issues -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <!-- Font Awesome — local copy, works offline and in Electron -->
+    <link rel="stylesheet" href="./node_modules/@fortawesome/fontawesome-free/css/all.min.css" />
     <!-- PrismJS theme for syntax highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
     <style>
@@ -538,6 +538,19 @@
         opacity: 0.5;
       }
 
+      .source-toggle {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        font-size: 11px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        transition: background 0.2s;
+      }
+      .source-toggle:hover {
+        background: rgba(79, 195, 247, 0.15);
+      }
+
       /* Minimalist Listening Animation */
       .listening-indicator {
         display: none;
@@ -634,21 +647,32 @@
       /* Interim text overlay */
       .interim-overlay {
         position: fixed;
-        bottom: 80px;
-        left: 20px;
-        right: 20px;
-        background: rgba(0, 0, 0, 0.028);
-        backdrop-filter: blur(15px);
-        border: 1px solid rgba(76, 175, 80, 0.3);
+        bottom: 72px;
+        left: 10px;
+        right: 10px;
+        background: rgba(15, 30, 15, 0.88);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(76, 175, 80, 0.7);
+        border-left: 3px solid rgba(76, 175, 80, 1);
         border-radius: 8px;
-        padding: 12px;
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 12px;
+        padding: 10px 14px;
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 13px;
         font-style: italic;
         z-index: 999;
         pointer-events: none;
         display: none;
-        animation: slideUpFade 0.3s ease-out;
+        box-shadow: 0 2px 16px rgba(76, 175, 80, 0.25);
+        animation: slideUpFade 0.2s ease-out;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 80px;
+        overflow: hidden;
+      }
+
+      .interim-overlay::before {
+        content: '🎤 ';
+        font-style: normal;
       }
 
       .interim-overlay.active {
@@ -676,6 +700,11 @@
           <div class="recording-indicator" id="recordingIndicator"></div>
         </div>
         <div class="header-actions">
+          <!-- Audio source toggle: Mic vs System Audio (Meet/Teams) -->
+          <button class="icon-button source-toggle" id="audioSourceBtn" title="Switch audio source: Microphone or System Audio (Meet/Teams)">
+            <i class="fas fa-microphone-alt"></i>
+            <span id="audioSourceLabel" style="font-size:9px;margin-left:2px;">MIC</span>
+          </button>
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
           </button>
@@ -734,7 +763,7 @@
       let speechAvailable = false;
 
       // Chat persistence and deduplication
-      const CHAT_HISTORY_KEY = 'opencluely_chat_history_v1';
+      const CHAT_HISTORY_KEY = 'agentsami_chat_history_v1';
       let chatHistory = [];
       const recentResponseHashes = new Set();
       const RECENT_HASH_LIMIT = 50;
@@ -867,7 +896,7 @@
         messageDiv.appendChild(textDiv);
 
         chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        _scrollToBottomIfNeeded();
 
         if (!skipPersist) {
           chatHistory.push({ kind: 'message', type, text });
@@ -914,7 +943,7 @@
         thinkingDiv.appendChild(textDiv);
 
         chatMessages.appendChild(thinkingDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        _scrollToBottomIfNeeded();
       }
 
       // Hide thinking indicator
@@ -964,9 +993,11 @@
         if (!interimOverlay) return;
 
         if (text && text.trim()) {
-          interimOverlay.textContent = text;
+          interimOverlay.textContent = text.trim();
           interimOverlay.classList.add('active');
+          if (chatMessages) _scrollToBottomIfNeeded();
         } else {
+          interimOverlay.textContent = '';
           interimOverlay.classList.remove('active');
         }
       }
@@ -987,6 +1018,7 @@
 
       function handleRecordingStopped() {
         isRecording = false;
+        stopMicCapture();
 
         if (recordingIndicator) {
           recordingIndicator.style.display = 'none';
@@ -1001,18 +1033,11 @@
 
       function handleTranscription(text) {
         if (text && typeof text === 'string' && text.trim().length > 0) {
-          // Hide listening animation first
-          hideListeningAnimation();
-
-          // Show transcribed text with slight delay for smooth transition
-          setTimeout(() => {
-            addMessage(text.trim(), 'transcription');
-            
-            // Show thinking indicator after transcription
-            setTimeout(() => {
-              showThinkingIndicator();
-            }, 300);
-          }, 200);
+          // Just show the transcribed sentence in the chat as a caption.
+          // Do NOT show a thinking indicator here — the LLM is only called
+          // once the user stops recording, at which point onChatThinking fires.
+          addMessage(text.trim(), 'transcription');
+          showInterimText('');
         } else {
           console.warn('Invalid or empty transcription text - ignoring:', text);
         }
@@ -1109,7 +1134,7 @@
         messageDiv.appendChild(timeDiv);
         messageDiv.appendChild(textDiv);
         chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        _scrollToBottomIfNeeded();
 
         try { if (window.Prism && Prism.highlightElement) { Prism.highlightElement(codeEl); } } catch (_) {}
 
@@ -1139,6 +1164,237 @@
         // Add each code snippet separately
         blocks.forEach(b => addCodeSnippet(b.language, b.code));
       }
+
+      // ── Audio source selection ────────────────────────────────────────────
+      // 'mic'    = physical microphone (getUserMedia)
+      // 'system' = system audio / browser tab (getDisplayMedia) — hears Meet/Teams
+      let _audioSource = 'mic';
+
+      const audioSourceBtn = document.getElementById('audioSourceBtn');
+      const audioSourceLabel = document.getElementById('audioSourceLabel');
+
+      if (audioSourceBtn) {
+        audioSourceBtn.addEventListener('click', () => {
+          _audioSource = _audioSource === 'mic' ? 'system' : 'mic';
+          if (_audioSource === 'system') {
+            audioSourceLabel.textContent = 'SYS';
+            audioSourceBtn.style.color = '#4fc3f7';
+            audioSourceBtn.title = 'Audio source: System Audio (Meet/Teams) — click to switch to Mic';
+            addMessage('Audio source: System Audio (captures Google Meet / Teams). Press Alt+R to start.', 'system');
+          } else {
+            audioSourceLabel.textContent = 'MIC';
+            audioSourceBtn.style.color = '';
+            audioSourceBtn.title = 'Audio source: Microphone — click to switch to System Audio';
+            addMessage('Audio source: Microphone.', 'system');
+          }
+        });
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      // ── Web Audio API audio capture (mic or system) ───────────────────────
+      let _audioContext = null;
+      let _mediaStream = null;
+      let _scriptProcessor = null;
+
+      function _convertFloat32ToInt16(float32) {
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
+        }
+        return int16;
+      }
+
+      async function _startAudioPipeline(stream, label) {
+        _mediaStream = stream;
+        _audioContext = new AudioContext();
+        const actualRate = _audioContext.sampleRate;
+        console.log('[AUDIO] AudioContext sample rate:', actualRate, 'Hz');
+
+        if (whysperAPI && whysperAPI.setAudioSampleRate) {
+          await whysperAPI.setAudioSampleRate(actualRate);
+        }
+
+        const source = _audioContext.createMediaStreamSource(_mediaStream);
+        _scriptProcessor = _audioContext.createScriptProcessor(4096, 1, 1);
+        _scriptProcessor.onaudioprocess = (e) => {
+          if (!_mediaStream) return;
+          const int16 = _convertFloat32ToInt16(e.inputBuffer.getChannelData(0));
+          if (whysperAPI && whysperAPI.sendAudioChunk) {
+            whysperAPI.sendAudioChunk(int16.buffer);
+          }
+        };
+        source.connect(_scriptProcessor);
+        _scriptProcessor.connect(_audioContext.destination);
+        addMessage(label + ' active — listening...', 'system');
+        console.log('[AUDIO] Capture running:', label, 'at', actualRate, 'Hz');
+      }
+
+      async function startMicCapture() {
+        if (_mediaStream) return;
+        if (_audioSource === 'system') {
+          await startSystemAudioCapture();
+          return;
+        }
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            addMessage('Microphone API not available in this window.', 'error');
+            return;
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          await _startAudioPipeline(stream, 'Microphone');
+        } catch (err) {
+          console.error('[MIC] getUserMedia failed:', err);
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            addMessage('Microphone blocked. Go to Windows Settings → Privacy → Microphone and allow Desktop Apps.', 'error');
+          } else if (err.name === 'NotFoundError') {
+            addMessage('No microphone detected. Please connect a microphone and try again.', 'error');
+          } else {
+            addMessage('Microphone error: ' + err.message, 'error');
+          }
+        }
+      }
+
+      async function startSystemAudioCapture() {
+        try {
+          // Step 1: Get screen source IDs from Electron's desktopCapturer (main process)
+          if (!whysperAPI || !whysperAPI.getDesktopSources) {
+            throw new Error('Desktop capture API not available');
+          }
+          const sources = await whysperAPI.getDesktopSources();
+          if (!sources || sources.length === 0) {
+            throw new Error('No screen sources found');
+          }
+
+          // Pick the primary screen source (captures all system audio including Meet/Teams)
+          const screenSource = sources.find(s =>
+            s.name.toLowerCase().includes('entire') ||
+            s.name.toLowerCase().includes('screen') ||
+            s.id.startsWith('screen:')
+          ) || sources[0];
+
+          console.log('[SYS AUDIO] Using source:', screenSource.name, screenSource.id);
+          addMessage('Capturing system audio (Meet / Teams)...', 'system');
+
+          // Step 2: getUserMedia with chromeMediaSource: 'desktop' — Electron's way to
+          // capture system audio. Must include video constraint to satisfy the API,
+          // but we immediately drop the video track.
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+              }
+            },
+            video: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: screenSource.id,
+                minWidth: 1,
+                maxWidth: 1,
+                minHeight: 1,
+                maxHeight: 1,
+                maxFrameRate: 1,
+              }
+            }
+          });
+
+          // Drop video immediately — only audio is needed
+          stream.getVideoTracks().forEach(t => t.stop());
+
+          const audioTracks = stream.getAudioTracks();
+          if (audioTracks.length === 0) {
+            throw new Error('Desktop capture returned no audio track. Make sure speakers/headset are active and system volume is not muted.');
+          }
+
+          const audioOnlyStream = new MediaStream(audioTracks);
+          await _startAudioPipeline(audioOnlyStream, 'System audio (Meet/Teams)');
+
+          // Auto-stop if system stops sharing
+          audioTracks[0].addEventListener('ended', () => {
+            addMessage('System audio stream ended.', 'system');
+            stopMicCapture();
+          });
+
+        } catch (err) {
+          console.error('[SYSTEM AUDIO] Desktop capture failed:', err);
+          addMessage(
+            'System audio capture failed: ' + err.message + '\n\n' +
+            'Tip: On Windows, enable "Stereo Mix" in Sound Settings → Recording devices, ' +
+            'then switch to MIC mode and select Stereo Mix.',
+            'error'
+          );
+          _audioSource = 'mic';
+          if (audioSourceLabel) audioSourceLabel.textContent = 'MIC';
+          if (audioSourceBtn) audioSourceBtn.style.color = '';
+        }
+      }
+
+      function stopMicCapture() {
+        if (_scriptProcessor) { try { _scriptProcessor.disconnect(); } catch (_) {} _scriptProcessor = null; }
+        if (_audioContext)    { try { _audioContext.close(); }         catch (_) {} _audioContext = null; }
+        if (_mediaStream)    { _mediaStream.getTracks().forEach(t => t.stop()); _mediaStream = null; }
+        console.log('[AUDIO] Capture stopped');
+      }
+
+      // Listen for main-process command to start/stop capture
+      if (whysperAPI && whysperAPI.onRecordingCommand) {
+        whysperAPI.onRecordingCommand((event, data) => {
+          if (data && data.command === 'start') {
+            startMicCapture();
+          } else if (data && data.command === 'stop') {
+            stopMicCapture();
+          }
+        });
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      // ── Streaming LLM response into chat in real time ────────────────────
+      let _streamingDiv = null;
+      // Track whether the user has manually scrolled up so we don't force them back down
+      let _userScrolledUp = false;
+
+      if (chatMessages) {
+        chatMessages.addEventListener('scroll', () => {
+          const distFromBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight;
+          // If within 40 px of the bottom, treat as "at bottom" and re-enable auto-scroll
+          _userScrolledUp = distFromBottom > 40;
+        });
+      }
+
+      function _scrollToBottomIfNeeded() {
+        if (!_userScrolledUp && chatMessages) {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      }
+
+      function _getOrCreateStreamingDiv() {
+        if (_streamingDiv && chatMessages && chatMessages.contains(_streamingDiv)) {
+          return _streamingDiv;
+        }
+        _streamingDiv = document.createElement('div');
+        _streamingDiv.className = 'message assistant streaming';
+        // Explicit white colour so it never inherits a dark background's default black
+        _streamingDiv.style.cssText = 'white-space: pre-wrap; word-break: break-word; opacity: 0.95; color: rgba(255,255,255,0.95);';
+        if (chatMessages) chatMessages.appendChild(_streamingDiv);
+        return _streamingDiv;
+      }
+
+      if (whysperAPI && whysperAPI.onLlmStreamChunk) {
+        whysperAPI.onLlmStreamChunk((event, data) => {
+          if (data && data.chunk) {
+            try { hideThinkingIndicator(); } catch (_) {}
+            const div = _getOrCreateStreamingDiv();
+            div.textContent = (div.textContent || '') + data.chunk;
+            _scrollToBottomIfNeeded();
+          }
+        });
+      }
+
+      if (whysperAPI && whysperAPI.onChatThinking) {
+        whysperAPI.onChatThinking(() => {
+          showThinkingIndicator();
+        });
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       // Basic IPC Event Listeners - simplified
       
@@ -1174,7 +1430,7 @@
         // Listen for speech errors
         whysperAPI.onSpeechError((event, data) => {
           if (data && data.error) {
-            addMessage(`Error in recognizing speech`, 'error');
+            addMessage(`Speech error: ${data.error}`, 'error');
             handleRecordingStopped();
           }
         });
@@ -1196,6 +1452,11 @@
         whysperAPI.onTranscriptionLlmResponse((event, data) => {
           if (data && data.response) {
             try { hideThinkingIndicator(); } catch (_) {}
+            // Remove the raw streaming div (no markdown) and replace with properly rendered version
+            if (_streamingDiv && chatMessages && chatMessages.contains(_streamingDiv)) {
+              chatMessages.removeChild(_streamingDiv);
+              _streamingDiv = null;
+            }
             renderAssistantResponse(data.response);
           }
         });

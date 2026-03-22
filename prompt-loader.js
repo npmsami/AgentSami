@@ -6,8 +6,8 @@ class PromptLoader {
     this.prompts = new Map();
     this.promptsLoaded = false;
     this.skillPromptSent = new Set();
-    // Focus only on DSA
-    this.skillsRequiringProgrammingLanguage = ['dsa'];
+    // No skills require a specific programming language selection in this config
+    this.skillsRequiringProgrammingLanguage = [];
   }
 
   /**
@@ -26,7 +26,6 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -151,7 +150,7 @@ STRICT REQUIREMENTS:
     const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage);
     
     const requestConfig = {
-      model: 'gemini-pro', // or your preferred Gemini model
+      model: 'gpt-4o',
       contents: [],
       systemInstruction: null,
       generationConfig: {
@@ -271,11 +270,11 @@ STRICT REQUIREMENTS:
       const components = this.getRequestComponents(skillName, userMessage, storedMemory, programmingLanguage);
 
       // Prepare the actual API request
-      const geminiRequest = this.prepareGeminiRequest(skillName, userMessage, storedMemory, programmingLanguage);
+      const openaiRequest = this.prepareGeminiRequest(skillName, userMessage, storedMemory, programmingLanguage);
       
       return {
         requestReady: true,
-        geminiRequest,
+        openaiRequest,
         components,
         needsMemoryUpdate: true,
         programmingLanguage
@@ -320,39 +319,44 @@ STRICT REQUIREMENTS:
     // Convert to lowercase and handle common variations
     const normalized = skillName.toLowerCase().trim();
     
-    // Map common variations to standard names
+    // Map all 20 engineering skills to their prompt files
     const skillMap = {
-      'dsa': 'dsa',
-      'data-structures': 'dsa',
-      'algorithms': 'dsa',
-      'data-structures-algorithms': 'dsa',
-      'behavioral': 'behavioral',
-      'behavioral-interview': 'behavioral',
-      'behavior': 'behavioral',
-      'sales': 'sales',
-      'selling': 'sales',
-      'business-development': 'sales',
-      'presentation': 'presentation',
-      'presentations': 'presentation',
-      'public-speaking': 'presentation',
-      'data-science': 'data-science',
-      'datascience': 'data-science',
-      'machine-learning': 'data-science',
-      'ml': 'data-science',
-      'programming': 'programming',
-      'coding': 'programming',
-      'software-development': 'programming',
-      'development': 'programming',
+      // Cloud Engineering group → cloud-engineering.md
+      'cloud-engineering': 'cloud-engineering',
+      'cloud-security-engineering': 'cloud-engineering',
+      'network-engineering': 'cloud-engineering',
+
+      // SRE / Reliability / Observability group → sre.md
+      'sre': 'sre',
+      'site-reliability-engineering': 'sre',
+      'reliability-engineering': 'sre',
+      'observability-engineering': 'sre',
+      'monitoring-engineering': 'sre',
+      'monitoring-logging-engineering': 'sre',
+
+      // Platform / Infrastructure / Kubernetes / IaC group → platform-engineering.md
+      'platform-engineering': 'platform-engineering',
+      'infrastructure-engineering': 'platform-engineering',
+      'kubernetes-engineering': 'platform-engineering',
+      'kubernetes-container-platform-engineering': 'platform-engineering',
+      'iac-engineering': 'platform-engineering',
+      'infrastructure-as-code-engineering': 'platform-engineering',
+
+      // DevOps / CI-CD / Release / Build / Automation / DevSecOps group → devops.md
       'devops': 'devops',
-      'dev-ops': 'devops',
-      'infrastructure': 'devops',
-      'system-design': 'system-design',
-      'systems-design': 'system-design',
-      'architecture': 'system-design',
-      'distributed-systems': 'system-design',
-      'negotiation': 'negotiation',
-      'negotiating': 'negotiation',
-      'conflict-resolution': 'negotiation'
+      'devops-engineering': 'devops',
+      'devsecops-engineering': 'devops',
+      'devsecops': 'devops',
+      'cicd-engineering': 'devops',
+      'ci-cd-engineering': 'devops',
+      'release-engineering': 'devops',
+      'build-engineering': 'devops',
+      'automation-engineering': 'devops',
+
+      // Systems / Performance / Operations group → systems-engineering.md
+      'systems-engineering': 'systems-engineering',
+      'performance-engineering': 'systems-engineering',
+      'operations-engineering': 'systems-engineering',
     };
 
     return skillMap[normalized] || normalized;
@@ -366,7 +370,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return Array.from(this.prompts.keys());
   }
 
   /**

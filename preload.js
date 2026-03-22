@@ -30,10 +30,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendChatMessage: (text) => ipcRenderer.invoke('send-chat-message', text),
   getSkillPrompt: (skillName) => ipcRenderer.invoke('get-skill-prompt', skillName),
   
-  // Gemini LLM configuration
-  setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
-  getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
-  testGeminiConnection: () => ipcRenderer.invoke('test-gemini-connection'),
+  // OpenAI LLM configuration
+  setOpenAIApiKey: (apiKey) => ipcRenderer.invoke('set-openai-api-key', apiKey),
+  getOpenAIStatus: () => ipcRenderer.invoke('get-openai-status'),
+  testOpenAIConnection: () => ipcRenderer.invoke('test-openai-connection'),
   
   // Settings
   showSettings: () => ipcRenderer.invoke('show-settings'),
@@ -73,6 +73,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
   captureArea: (options) => ipcRenderer.invoke('capture-area', options),
+
+  // Desktop audio sources (Electron desktopCapturer — for system audio capture)
+  getDesktopSources: () => ipcRenderer.invoke('get-desktop-sources'),
   
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),
@@ -87,13 +90,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLlmResponse: (callback) => ipcRenderer.on('llm-response', callback),
   onLlmError: (callback) => ipcRenderer.on('llm-error', callback),
   onTranscriptionLlmResponse: (callback) => ipcRenderer.on('transcription-llm-response', callback),
-  onOpenGeminiConfig: (callback) => ipcRenderer.on('open-gemini-config', callback),
+  onOpenOpenAIConfig: (callback) => ipcRenderer.on('open-openai-config', callback),
   onDisplayLlmResponse: (callback) => ipcRenderer.on('display-llm-response', callback),
   onShowLoading: (callback) => ipcRenderer.on('show-loading', callback),
   onSkillChanged: (callback) => ipcRenderer.on('skill-changed', callback),
   onInteractionModeChanged: (callback) => ipcRenderer.on('interaction-mode-changed', callback),
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
+  onLlmStreamChunk: (callback) => ipcRenderer.on('llm-stream-chunk', callback),
+  onChatThinking: (callback) => ipcRenderer.on('chat-thinking', callback),
+  onRecordingCommand: (callback) => ipcRenderer.on('recording-command', callback),
+  sendAudioChunk: (chunk) => ipcRenderer.send('audio-chunk', chunk),
+  setAudioSampleRate: (rate) => ipcRenderer.invoke('set-audio-sample-rate', rate),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   
   // Generic receive method

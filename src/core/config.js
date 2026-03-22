@@ -4,16 +4,16 @@ const os = require('os');
 class ConfigManager {
   constructor() {
     this.env = process.env.NODE_ENV || 'development';
-    this.appDataDir = path.join(os.homedir(), '.OpenCluely');
+    this.appDataDir = path.join(os.homedir(), '.AgentSami');
     this.loadConfiguration();
   }
 
   loadConfiguration() {
     this.config = {
       app: {
-        name: 'OpenCluely',
+        name: 'AgentSami',
         version: '1.0.0',
-        processTitle: 'OpenCluely',
+        processTitle: 'AgentSami',
         dataDir: this.appDataDir,
         isDevelopment: this.env === 'development',
         isProduction: this.env === 'production'
@@ -39,27 +39,22 @@ class ConfigManager {
       },
 
       llm: {
-        gemini: {
-          model: 'gemini-2.5-flash',
-          maxRetries: 3,
-          timeout: 60000,
+        openai: {
+          model: 'gpt-4o-mini',
+          maxRetries: 1,
+          timeout: 15000,
           fallbackEnabled: true,
-          enableFallbackMethod: true,
           generation: {
             temperature: 0.7,
-            topK: 32,
-            topP: 0.9,
-            maxOutputTokens: 4096
+            max_tokens: 1024
           }
         }
       },
 
       speech: {
-        azure: {
+        google: {
           language: 'en-US',
-          enableDictation: true,
-          enableAudioLogging: false,
-          outputFormat: 'detailed'
+          model: 'latest_long'
         }
       },
 

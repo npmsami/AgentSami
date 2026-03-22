@@ -1,5 +1,5 @@
 {
-  "name": "opencluely",
+  "name": "agentsami",
   "version": "1.0.0",
   "description": "AI Problem Solving Assistant",
   "main": "main.js",
@@ -26,16 +26,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TechyCSR/OpenCluely"
+    "url": "https://github.com/npmsami/AgentSami"
   },
   "license": "ISC",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
+    "@fortawesome/fontawesome-free": "^7.2.0",
+    "@google-cloud/speech": "^7.3.0",
     "dotenv": "^16.3.1",
     "markdown": "^0.5.0",
     "marked": "^15.0.12",
-    "microsoft-cognitiveservices-speech-sdk": "^1.40.0",
     "node-record-lpcm16": "^1.0.1",
+    "openai": "^6.27.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^4.7.1"
   },
@@ -44,8 +45,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.opencluely.app",
-    "productName": "OpenCluely",
+    "appId": "com.agentsami.app",
+    "productName": "AgentSami",
     "directories": {
       "output": "dist"
     },
@@ -134,7 +135,7 @@
       "createStartMenuShortcut": true
     },
     "dmg": {
-      "title": "OpenCluely Interview Assistant",
+      "title": "AgentSami Interview Assistant",
       "backgroundColor": "#000000",
       "window": {
         "width": 600,
