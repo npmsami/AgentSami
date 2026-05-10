@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
+const { app, BrowserWindow, globalShortcut, session, ipcMain, dialog } = require("electron");
 const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
 
@@ -23,6 +23,9 @@ class ApplicationController {
     // Buffer that accumulates all final transcriptions while recording is active.
     // The LLM is only called when the user stops recording (Alt+R), not on each sentence.
     this.transcriptionBuffer = [];
+
+    // Interview context: stores uploaded CV and JD text for AI personalization
+    this.interviewContext = { cv: '', jd: '', cvFilename: '', jdFilename: '' };
 
     // Window configurations for reference
     this.windowConfigs = {
@@ -110,13 +113,14 @@ class ApplicationController {
     // Configure session to handle network requests better
     const ses = session.defaultSession;
     
-    // Allow HTTPS requests to Google APIs
-    ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (details.url.includes('generativelanguage.googleapis.com')) {
+    // Only mutate headers for Google Generative Language API requests.
+    ses.webRequest.onBeforeSendHeaders(
+      { urls: ['https://generativelanguage.googleapis.com/*'] },
+      (details, callback) => {
         details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.156 Safari/537.36';
+        callback({ requestHeaders: details.requestHeaders });
       }
-      callback({ requestHeaders: details.requestHeaders });
-    });
+    );
     
     // Handle certificate errors for Google APIs
     ses.setCertificateVerifyProc((request, callback) => {
@@ -379,9 +383,9 @@ class ApplicationController {
     ipcMain.handle("resize-window", (event, { width, height }) => {
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow) {
-        const minW = windowManager.windowConfigs?.main?.width || 216;
-        const maxW = minW;
-        const clampedWidth = Math.max(minW, Math.min(maxW, Math.round(width || minW)));
+        const minW = windowManager.windowConfigs?.main?.width || 240;
+        // Allow up to 1200px so side panels are fully visible
+        const clampedWidth = Math.max(minW, Math.min(1200, Math.round(width || minW)));
         try {
           // Match content size to the DOM so no extra transparent area remains
           mainWindow.setContentSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
@@ -568,6 +572,61 @@ class ApplicationController {
       }
     });
 
+    // ── Interview Prep handlers ────────────────────────────────────────────
+    ipcMain.handle("open-interview-prep", () => {
+      windowManager.showInterviewPrep();
+      return { success: true };
+    });
+
+    ipcMain.handle("hide-interview-prep", () => {
+      windowManager.hideInterviewPrep();
+      return { success: true };
+    });
+
+    // parse-pdf-buffer: renderer sends base64-encoded PDF bytes, main returns extracted text
+    ipcMain.handle("parse-pdf-buffer", async (event, base64Data) => {
+      try {
+        const pdfParse = require('pdf-parse');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const pdfData = await pdfParse(buffer);
+        const text = (pdfData.text || '').trim();
+        logger.info('PDF parsed successfully', { textLength: text.length });
+        return { success: true, text };
+      } catch (err) {
+        logger.error('PDF parse failed', { error: err.message });
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle("set-audio-source", (event, source) => {
+      // Broadcast to all renderers (chat.html uses this to switch getUserMedia/getDisplayMedia)
+      windowManager.broadcastToAllWindows("audio-source-changed", { source });
+      logger.info("Audio source changed", { source });
+      return { success: true };
+    });
+
+    ipcMain.handle("save-interview-context", (event, { cv, jd }) => {
+      this.interviewContext.cv = cv || '';
+      this.interviewContext.jd = jd || '';
+      llmService.setInterviewContext(this.interviewContext.cv, this.interviewContext.jd);
+      logger.info('Interview context saved', {
+        cvLength: this.interviewContext.cv.length,
+        jdLength: this.interviewContext.jd.length
+      });
+      return { success: true };
+    });
+
+    ipcMain.handle("get-interview-context", () => {
+      return this.interviewContext;
+    });
+
+    ipcMain.handle("clear-interview-context", () => {
+      this.interviewContext = { cv: '', jd: '', cvFilename: '', jdFilename: '' };
+      llmService.setInterviewContext('', '');
+      logger.info('Interview context cleared');
+      return { success: true };
+    });
+
     // Settings handlers
     ipcMain.handle("show-settings", () => {
       windowManager.showSettings();
@@ -703,6 +762,13 @@ class ApplicationController {
         windowManager.broadcastToAllWindows("speech-status", { status: 'Speech recognition unavailable', available: false });
         windowManager.broadcastToAllWindows("speech-availability", { available: false });
       } catch (e) {}
+      dialog.showMessageBox({
+        type: "warning",
+        title: "Speech Recognition Unavailable",
+        message: "Google Speech-to-Text is not configured.",
+        detail: "Set GOOGLE_SPEECH_KEY_FILE in your .env file to a valid Google Cloud service account JSON with the Speech-to-Text API enabled.",
+        buttons: ["OK"],
+      });
       return;
     }
     const currentStatus = speechService.getStatus();
@@ -843,6 +909,7 @@ class ApplicationController {
       "performance-engineering",
       "reliability-engineering",
       "operations-engineering",
+      "ai-specialist",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);

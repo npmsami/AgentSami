@@ -70,6 +70,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   
+  // Interview Prep
+  openInterviewPrep: () => ipcRenderer.invoke('open-interview-prep'),
+  hideInterviewPrep: () => ipcRenderer.invoke('hide-interview-prep'),
+  parsePdfBuffer: (base64Data) => ipcRenderer.invoke('parse-pdf-buffer', base64Data),
+  saveInterviewContext: (ctx) => ipcRenderer.invoke('save-interview-context', ctx),
+  getInterviewContext: () => ipcRenderer.invoke('get-interview-context'),
+  clearInterviewContext: () => ipcRenderer.invoke('clear-interview-context'),
+
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
   captureArea: (options) => ipcRenderer.invoke('capture-area', options),
@@ -103,6 +111,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendAudioChunk: (chunk) => ipcRenderer.send('audio-chunk', chunk),
   setAudioSampleRate: (rate) => ipcRenderer.invoke('set-audio-sample-rate', rate),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
+  onInlineLlmResponse: (callback) => ipcRenderer.on('inline-llm-response', callback),
+  onInlineLlmLoading: (callback) => ipcRenderer.on('inline-llm-loading', callback),
+  setAudioSource: (source) => ipcRenderer.invoke('set-audio-source', source),
+  onAudioSourceChanged: (callback) => ipcRenderer.on('audio-source-changed', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),

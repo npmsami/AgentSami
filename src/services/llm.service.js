@@ -1,7 +1,18 @@
+const https = require('https');
 const OpenAI = require('openai');
 const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
+
+// Shared HTTPS agent — keeps TCP+TLS connections alive across requests.
+// Without this, every request pays 100-300 ms for a fresh TLS handshake.
+const sharedAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 5,
+  maxFreeSockets: 5,
+  timeout: 60000,
+});
 
 class LLMService {
   constructor() {
@@ -9,8 +20,55 @@ class LLMService {
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
-    
+    this.interviewContext = { cv: '', jd: '' };
+
+    // Cached values — refreshed on init and when the API key changes.
+    this._cachedApiKey = null;
+    this._cachedModel = null;
+    this._cachedTimeout = null;
+    this._cachedMaxRetries = null;
+    this._cachedUserAgent = null;
+    this._cachedGenerationConfig = null;
+
     this.initializeClient();
+    this._refreshCache();
+  }
+
+  /** Refresh all values that are read on every request. */
+  _refreshCache() {
+    this._cachedApiKey = config.getApiKey('OPENAI');
+    this._cachedModel = config.get('llm.openai.model');
+    this._cachedTimeout = config.get('llm.openai.timeout');
+    this._cachedMaxRetries = config.get('llm.openai.maxRetries');
+    this._cachedGenerationConfig = null; // cleared so getGenerationConfig rebuilds once
+  }
+
+  setInterviewContext(cv, jd) {
+    this.interviewContext = { cv: cv || '', jd: jd || '' };
+    logger.info('Interview context updated', {
+      hasCv: !!this.interviewContext.cv,
+      hasJd: !!this.interviewContext.jd
+    });
+  }
+
+  getInterviewContext() {
+    return this.interviewContext;
+  }
+
+  buildInterviewContextBlock() {
+    const ctx = this.interviewContext;
+    if (!ctx || (!ctx.cv && !ctx.jd)) return '';
+
+    let block = '\n\n## Interview Context\nUse the following information to personalize and tailor your answers to this specific candidate and role:\n\n';
+    if (ctx.cv) {
+      const cvSnippet = ctx.cv.length > 3000 ? ctx.cv.substring(0, 3000) + '\n[... truncated ...]' : ctx.cv;
+      block += `### Candidate Resume/CV:\n${cvSnippet}\n\n`;
+    }
+    if (ctx.jd) {
+      const jdSnippet = ctx.jd.length > 2000 ? ctx.jd.substring(0, 2000) + '\n[... truncated ...]' : ctx.jd;
+      block += `### Job Description:\n${jdSnippet}\n`;
+    }
+    return block;
   }
 
   initializeClient() {
@@ -39,15 +97,19 @@ class LLMService {
   }
 
   getGenerationConfig(overrides = {}) {
-    const defaults = config.get('llm.openai.generation') || {};
-    const fallback = {
-      temperature: 0.7,
-      max_tokens: 4096
-    };
+    // Build the base config once and cache it; reuse on every call (overrides still applied fresh).
+    if (!this._cachedGenerationConfig) {
+      const defaults = config.get('llm.openai.generation') || {};
+      const fallback = { temperature: 0.7, max_tokens: 2048 };
+      this._cachedGenerationConfig = Object.fromEntries(
+        Object.entries({ ...fallback, ...defaults }).filter(([, v]) => v !== undefined && v !== null)
+      );
+    }
 
-    const merged = { ...fallback, ...defaults, ...overrides };
+    if (!Object.keys(overrides).length) return this._cachedGenerationConfig;
+
     return Object.fromEntries(
-      Object.entries(merged).filter(([, value]) => value !== undefined && value !== null)
+      Object.entries({ ...this._cachedGenerationConfig, ...overrides }).filter(([, v]) => v !== undefined && v !== null)
     );
   }
 
@@ -84,15 +146,12 @@ class LLMService {
    * Returns the full accumulated text when complete.
    */
   async executeStreamingRequest(openaiRequest, onChunk) {
-    const https = require('https');
-    const apiKey = config.getApiKey('OPENAI');
-    const model = config.get('llm.openai.model');
-    const timeout = config.get('llm.openai.timeout');
+    const apiKey = this._cachedApiKey;
+    const model = this._cachedModel;
+    const timeout = this._cachedTimeout;
 
     const requestBody = { model, ...openaiRequest, stream: true };
     const postData = JSON.stringify(requestBody);
-
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
 
     const options = {
       method: 'POST',
@@ -100,13 +159,13 @@ class LLMService {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
         'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': this.getUserAgent()
+        'User-Agent': this.getUserAgent(),
       },
       timeout,
-      agent
+      agent: sharedAgent,
     };
 
-    logger.info('Starting streaming request via native HTTPS');
+    logger.debug('Starting streaming request via native HTTPS');
 
     return new Promise((resolve, reject) => {
       const req = https.request('https://api.openai.com/v1/chat/completions', options, (res) => {
@@ -155,7 +214,7 @@ class LLMService {
               } catch (_) {}
             }
           }
-          logger.info('Streaming request completed', { responseLength: fullText.length });
+          logger.debug('Streaming request completed', { responseLength: fullText.length });
           resolve(fullText);
         });
 
@@ -493,12 +552,14 @@ class LLMService {
     const messages = [];
 
     if (skillContext.skillPrompt) {
-      messages.push({ role: 'system', content: skillContext.skillPrompt });
+      const systemContent = skillContext.skillPrompt + this.buildInterviewContextBlock();
+      messages.push({ role: 'system', content: systemContent });
       
       logger.debug('Using skill context prompt as system message', {
         skill: activeSkill,
         programmingLanguage: programmingLanguage || 'not specified',
-        promptLength: skillContext.skillPrompt.length
+        promptLength: systemContent.length,
+        hasInterviewContext: !!(this.interviewContext.cv || this.interviewContext.jd)
       });
     }
 
@@ -629,6 +690,8 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
 - **Behavioural / situational questions**: structured STAR answer (Situation, Task, Action, Result) in 4–6 sentences.
 - **Casual / filler speech** (e.g. "um", "okay", "let me think"): respond with a single short encouraging phrase like "Take your time." or "Go ahead."`;
 
+    prompt += this.buildInterviewContextBlock();
+
     return prompt;
   }
 
@@ -637,15 +700,15 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
   }
 
   async executeRequest(openaiRequest) {
-    const maxRetries = config.get('llm.openai.maxRetries');
-    const timeout = config.get('llm.openai.timeout');
-    const model = config.get('llm.openai.model');
-    
+    const maxRetries = this._cachedMaxRetries;
+    const timeout = this._cachedTimeout;
+    const model = this._cachedModel;
+
     logger.debug('Executing OpenAI request', {
       hasClient: !!this.client,
       model,
       timeout,
-      maxRetries
+      maxRetries,
     });
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -709,14 +772,15 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
   }
 
   getUserAgent() {
+    if (this._cachedUserAgent) return this._cachedUserAgent;
     try {
-      if (typeof navigator !== 'undefined' && navigator.userAgent) {
-        return navigator.userAgent;
-      }
-      return `Node.js/${process.version} (${process.platform}; ${process.arch})`;
+      this._cachedUserAgent = (typeof navigator !== 'undefined' && navigator.userAgent)
+        ? navigator.userAgent
+        : `Node.js/${process.version} (${process.platform}; ${process.arch})`;
     } catch {
-      return 'Unknown';
+      this._cachedUserAgent = 'Unknown';
     }
+    return this._cachedUserAgent;
   }
 
   analyzeError(error) {
@@ -854,6 +918,7 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
       'presentation': ['slide', 'audience', 'public speaking', 'presentation', 'nervous'],
       'data-science': ['data', 'model', 'machine learning', 'statistics', 'analytics', 'python', 'pandas'],
       'devops': ['deployment', 'ci/cd', 'docker', 'kubernetes', 'infrastructure', 'monitoring'],
+      'ai-specialist': ['chatgpt', 'zapier', 'make.com', 'automation', 'prompt', 'workflow', 'llm', 'ai tool', 'midjourney', 'claude', 'gemini'],
       'negotiation': ['negotiate', 'compromise', 'agreement', 'terms', 'conflict resolution']
     };
 
@@ -938,7 +1003,7 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
     process.env.OPENAI_API_KEY = newApiKey;
     this.isInitialized = false;
     this.initializeClient();
-    
+    this._refreshCache();
     logger.info('OpenAI API key updated and client reinitialized');
   }
 
@@ -957,16 +1022,11 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
   }
 
   async executeAlternativeRequest(openaiRequest) {
-    const https = require('https');
-    const apiKey = config.getApiKey('OPENAI');
-    const model = config.get('llm.openai.model');
-    
-    logger.info('Using alternative HTTPS request method for OpenAI');
-    
+    const apiKey = this._cachedApiKey;
+    const model = this._cachedModel;
+
     const requestBody = { model, ...openaiRequest };
     const postData = JSON.stringify(requestBody);
-    
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
 
     const options = {
       method: 'POST',
@@ -974,10 +1034,10 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
         'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': this.getUserAgent()
+        'User-Agent': this.getUserAgent(),
       },
-      timeout: config.get('llm.openai.timeout'),
-      agent
+      timeout: this._cachedTimeout,
+      agent: sharedAgent,
     };
 
     return new Promise((resolve, reject) => {
@@ -1002,10 +1062,10 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
               logger.warn('OpenAI alternative response reached max tokens limit', { finishReason });
             }
             
-            logger.info('Alternative request successful', {
+            logger.debug('Alternative request successful', {
               responseLength: text.length,
               statusCode: res.statusCode,
-              finishReason
+              finishReason,
             });
             
             resolve(text.trim());

@@ -16,14 +16,21 @@
         height: fit-content;
       }
 
+      /* Flex wrapper so chat sits to the right of the main panel */
+      #appRoot {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
       /* ── Main Panel ───────────────────────────────────────────────────── */
       .panel {
-        width: 200px;
-        background: linear-gradient(160deg, rgba(12,12,18,0.92) 0%, rgba(22,22,32,0.88) 100%);
-        backdrop-filter: blur(24px);
-        border: 1px solid rgba(255,255,255,0.10);
+        width: 230px;
+        background: linear-gradient(160deg, rgba(12,12,18,0.68) 0%, rgba(22,22,32,0.62) 100%);
+        backdrop-filter: blur(28px);
+        border: 1px solid rgba(255,255,255,0.09);
         border-radius: 14px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.06) inset;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.05) inset;
         overflow: visible;
         -webkit-app-region: drag;
       }
@@ -41,14 +48,14 @@
         display: flex;
         align-items: center;
         gap: 7px;
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 700;
         color: rgba(255,255,255,0.9);
         letter-spacing: 0.3px;
       }
       .panel-brand i {
         color: #4fc3f7;
-        font-size: 13px;
+        font-size: 15px;
       }
       .status-pill {
         display: flex;
@@ -58,7 +65,7 @@
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 20px;
         padding: 3px 8px;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         color: rgba(255,255,255,0.55);
         -webkit-app-region: no-drag;
@@ -100,7 +107,7 @@
 
       /* ── Section label ────────────────────────────────────────────────── */
       .section-label {
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.8px;
         text-transform: uppercase;
@@ -145,20 +152,20 @@
       }
       .action-btn .btn-text { flex: 1; }
       .action-btn .btn-label {
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
         display: block;
         line-height: 1.3;
       }
       .action-btn .btn-hint {
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 500;
         color: rgba(255,255,255,0.35);
         display: block;
         line-height: 1.2;
       }
       .action-btn .btn-shortcut {
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 600;
         color: rgba(255,255,255,0.3);
         background: rgba(255,255,255,0.06);
@@ -225,7 +232,7 @@
       }
       #skillIndicator:hover { background: rgba(255,255,255,0.04); }
       .skill-name {
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 700;
         color: rgba(255,255,255,0.9);
         display: block;
@@ -234,7 +241,7 @@
         text-overflow: ellipsis;
       }
       .skill-sublabel {
-        font-size: 9px;
+        font-size: 11px;
         color: rgba(255,255,255,0.35);
         display: block;
         margin-top: 1px;
@@ -260,17 +267,21 @@
         border: 1px solid rgba(255,255,255,0.07);
         background: rgba(255,255,255,0.04);
         color: rgba(255,255,255,0.5);
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         cursor: pointer;
         transition: background 0.15s, color 0.15s;
         -webkit-app-region: no-drag;
       }
       .footer-btn:hover { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.85); }
-      .footer-btn i { font-size: 10px; }
+      .footer-btn i { font-size: 12px; }
 
       #settingsIndicator i { color: rgba(255,167,38,0.7); }
       #settingsIndicator:hover i { color: #ffa726; }
+      #interviewPrepBtn i { color: rgba(167,139,250,0.7); }
+      #interviewPrepBtn:hover i { color: #a78bfa; }
+      #interviewPrepBtn.context-loaded { border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.08); color: rgba(167,139,250,0.9); }
+      #interviewPrepBtn.context-loaded i { color: #a78bfa; }
       #infoButton i { color: rgba(96,165,250,0.7); }
       #infoButton:hover i { color: #60a5fa; }
 
@@ -352,6 +363,115 @@
       .shortcuts-footer a { color: #60a5fa; text-decoration: none; }
       .shortcuts-footer a:hover { text-decoration: underline; }
 
+      /* ── Chat Side Panel ─────────────────────────────────────────────── */
+      #chatPanel {
+        width: 420px;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(160deg, rgba(10,10,18,0.62) 0%, rgba(18,18,28,0.56) 100%);
+        backdrop-filter: blur(28px);
+        border: 1px solid rgba(255,255,255,0.09);
+        border-radius: 14px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.30), 0 1px 0 rgba(255,255,255,0.05) inset;
+        overflow: hidden;
+        min-height: 420px;
+        max-height: 620px;
+        -webkit-app-region: no-drag;
+      }
+
+      /* Chat panel header (drag handle) */
+      .chat-panel-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 14px 9px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        background: rgba(255,255,255,0.03);
+        -webkit-app-region: drag;
+        flex-shrink: 0;
+      }
+      .chat-panel-title {
+        font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.85);
+        display: flex; align-items: center; gap: 7px;
+      }
+      .chat-panel-title i { color: #4fc3f7; font-size: 12px; }
+
+      /* Recording status bar */
+      .rec-bar {
+        display: flex; align-items: center; gap: 7px;
+        padding: 5px 12px;
+        background: rgba(255,71,87,0.10); border-bottom: 1px solid rgba(255,71,87,0.12);
+        font-size: 12px; color: rgba(255,107,122,0.9);
+        flex-shrink: 0;
+      }
+      .rec-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #ff4757; flex-shrink: 0;
+        animation: pulse-red 1.5s infinite;
+      }
+
+      /* Messages area */
+      #inlineMsgs {
+        flex: 1; overflow-y: auto; overflow-x: hidden;
+        padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+        scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+      }
+      #inlineMsgs::-webkit-scrollbar { width: 4px; }
+      #inlineMsgs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+      .im { border-radius: 8px; padding: 8px 11px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+      .im-user          { background: rgba(255,152,0,0.12); border-left: 2px solid rgba(255,152,0,0.5); color: rgba(255,255,255,0.9); }
+      .im-assistant     { background: rgba(156,39,176,0.10); border-left: 2px solid rgba(167,139,250,0.5); color: rgba(255,255,255,0.92); }
+      .im-transcription { background: rgba(76,175,80,0.10); border-left: 2px solid rgba(76,175,80,0.5); color: rgba(255,255,255,0.85); font-style: italic; }
+      .im-interim       { background: rgba(76,175,80,0.05); border-left: 2px dashed rgba(76,175,80,0.35);
+                          color: rgba(255,255,255,0.45); font-style: italic; font-size: 12px; }
+      .im-interim::before { content: '🎙 '; font-style: normal; }
+      .im-system        { background: rgba(33,150,243,0.07); border-left: 2px solid rgba(33,150,243,0.3); color: rgba(255,255,255,0.5); font-size: 12px; }
+      .im-thinking      { background: rgba(156,39,176,0.08); border-left: 2px solid rgba(156,39,176,0.3); }
+      .thinking-dots span { animation: thinking 1.4s infinite ease-in-out; display: inline-block; font-size: 18px; color: rgba(167,139,250,0.8); }
+      .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+      .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes thinking {
+        0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+        40%  { opacity: 1; transform: scale(1.2); }
+      }
+
+      /* Empty state */
+      .chat-empty {
+        flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        color: rgba(255,255,255,0.2); font-size: 12px; gap: 8px; padding: 20px;
+        text-align: center;
+      }
+      .chat-empty i { font-size: 28px; opacity: 0.4; }
+
+      /* Input row */
+      .chat-input-row {
+        display: flex; gap: 6px; align-items: flex-end;
+        padding: 8px 12px 10px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.02);
+        flex-shrink: 0;
+        -webkit-app-region: no-drag;
+      }
+      #inlineChatInput {
+        flex: 1; resize: none;
+        background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
+        border-radius: 8px; padding: 7px 10px;
+        color: rgba(255,255,255,0.92); font-size: 13px; line-height: 1.45;
+        outline: none; font-family: inherit;
+        min-height: 34px; max-height: 90px; overflow-y: auto;
+        -webkit-app-region: no-drag; box-sizing: border-box;
+        transition: border-color 0.15s;
+      }
+      #inlineChatInput:focus { border-color: rgba(79,195,247,0.35); }
+      #inlineChatInput::placeholder { color: rgba(255,255,255,0.28); }
+      #inlineSend {
+        width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+        border: 1px solid rgba(79,195,247,0.3); background: rgba(79,195,247,0.12);
+        color: #4fc3f7; font-size: 13px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background 0.15s;
+      }
+      #inlineSend:hover { background: rgba(79,195,247,0.25); }
+
       /* ── Skill change toast ───────────────────────────────────────────── */
       .skill-toast {
         position: absolute;
@@ -376,6 +496,9 @@
     </style>
   </head>
   <body>
+  <div id="appRoot">
+
+    <!-- ── Left: Main control panel ──────────────────────────────────────── -->
     <div class="panel" id="mainPanel">
 
       <!-- Header / Drag handle -->
@@ -433,17 +556,130 @@
 
       </div>
 
+      <!-- Interview Prep Panel (collapsible, lives inside main window) -->
+      <div id="prepSection" style="display:none; border-top:1px solid rgba(255,255,255,0.07);">
+        <div style="padding:10px 10px 8px; display:flex; flex-direction:column; gap:8px;">
+
+          <!-- CV -->
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:rgba(96,165,250,0.7);margin-bottom:4px;">
+              <i class="fas fa-id-card" style="margin-right:4px;"></i>Resume / CV
+            </div>
+            <textarea id="prepCvTA"
+              placeholder="Paste your CV / resume here…"
+              style="width:100%;min-height:72px;max-height:140px;
+                background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);
+                border-radius:7px;padding:7px 9px;color:rgba(255,255,255,0.82);
+                font-size:13px;font-family:inherit;line-height:1.5;resize:vertical;outline:none;
+                -webkit-app-region:no-drag;box-sizing:border-box;"></textarea>
+          </div>
+
+          <!-- JD -->
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:rgba(52,211,153,0.7);margin-bottom:4px;">
+              <i class="fas fa-file-lines" style="margin-right:4px;"></i>Job Description
+            </div>
+            <textarea id="prepJdTA"
+              placeholder="Paste the job description here…"
+              style="width:100%;min-height:72px;max-height:140px;
+                background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);
+                border-radius:7px;padding:7px 9px;color:rgba(255,255,255,0.82);
+                font-size:13px;font-family:inherit;line-height:1.5;resize:vertical;outline:none;
+                -webkit-app-region:no-drag;box-sizing:border-box;"></textarea>
+          </div>
+
+          <!-- Status -->
+          <div id="prepStatus" style="font-size:12px;color:rgba(255,255,255,0.38);display:flex;align-items:center;gap:5px;">
+            <i class="fas fa-circle-dot"></i><span id="prepStatusTxt">Paste your CV and/or JD then save.</span>
+          </div>
+
+          <!-- Buttons -->
+          <div style="display:flex;gap:6px;-webkit-app-region:no-drag;">
+            <button id="prepClearBtn"
+              style="flex:1;padding:6px 0;border-radius:7px;
+                border:1px solid rgba(239,68,68,0.22);background:rgba(239,68,68,0.06);
+                color:rgba(239,68,68,0.65);font-size:12px;font-weight:600;cursor:pointer;
+                display:flex;align-items:center;justify-content:center;gap:4px;">
+              <i class="fas fa-rotate-left"></i> Clear
+            </button>
+            <button id="prepSaveBtn"
+              style="flex:2;padding:6px 0;border-radius:7px;
+                border:1px solid rgba(167,139,250,0.35);background:rgba(167,139,250,0.12);
+                color:#c4b5fd;font-size:13px;font-weight:700;cursor:pointer;
+                display:flex;align-items:center;justify-content:center;gap:5px;">
+              <i class="fas fa-check"></i> Save Context
+            </button>
+          </div>
+
+        </div>
+      </div>
+
       <!-- Footer -->
       <div class="panel-footer">
         <button class="footer-btn" id="settingsIndicator" title="Settings (Ctrl+,)">
           <i class="fas fa-gear"></i> Settings
+        </button>
+        <button class="footer-btn" id="interviewPrepBtn" title="Upload CV & Job Description">
+          <i class="fas fa-briefcase"></i> Prep
         </button>
         <button class="footer-btn" id="infoButton" title="Keyboard shortcuts">
           <i class="fas fa-keyboard"></i> Keys
         </button>
       </div>
 
-    </div>
+    </div><!-- end .panel -->
+
+    <!-- ── Right: Chat / Response side panel ─────────────────────────────── -->
+    <div id="chatPanel">
+
+      <!-- Header / drag handle -->
+      <div class="chat-panel-header">
+        <div class="chat-panel-title">
+          <i class="fas fa-comments"></i> AI Chat
+        </div>
+        <div style="-webkit-app-region:no-drag; display:flex; gap:6px; align-items:center;">
+          <div class="rec-bar" id="recBar" style="display:none; padding:3px 8px; border-radius:20px; border:none; background:rgba(255,71,87,0.18);">
+            <span class="rec-dot"></span>
+            <span id="recBarTxt" style="font-size:11px;">Listening…</span>
+          </div>
+          <!-- Audio source toggle -->
+          <button id="audioSourceBtn" title="Audio source: Microphone — click to switch to System Audio"
+            style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;
+              border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);
+              color:rgba(255,255,255,0.55);font-size:11px;font-weight:600;cursor:pointer;
+              transition:background 0.15s,color 0.15s;">
+            <i class="fas fa-microphone-alt"></i>
+            <span id="audioSourceLabel">MIC</span>
+          </button>
+          <button id="chatClearBtn" title="Clear chat"
+            style="width:26px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);
+              background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.35);
+              font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+              transition:background 0.15s;">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div id="inlineMsgs">
+        <div class="chat-empty" id="chatEmpty">
+          <i class="fas fa-microphone-lines"></i>
+          <span>Press <strong>Alt+R</strong> to record,<br>take a screenshot, or type below.</span>
+        </div>
+      </div>
+
+      <!-- Input row -->
+      <div class="chat-input-row">
+        <textarea id="inlineChatInput" placeholder="Type a question… (Enter to send)" rows="1"></textarea>
+        <button id="inlineSend" title="Send (Enter)">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+
+    </div><!-- end #chatPanel -->
+
+  </div><!-- end #appRoot -->
 
     <!-- Skill change toast -->
     <div class="skill-toast" id="skillToast"></div>

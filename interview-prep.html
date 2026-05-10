@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Interview Prep</title>
+  <link href="./node_modules/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d14;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      -webkit-app-region: no-drag;
+    }
+
+    .window {
+      width: 100%;
+      min-height: 100vh;
+      background: linear-gradient(160deg, #0d0d14 0%, #111120 100%);
+      border: 1px solid rgba(255,255,255,0.10);
+      overflow: hidden;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    .win-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      -webkit-app-region: drag;
+    }
+    .win-title {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.92);
+    }
+    .win-title i { color: #a78bfa; font-size: 14px; }
+
+    .badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 600;
+      color: rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px; padding: 3px 10px;
+      -webkit-app-region: no-drag;
+    }
+    .badge.active { color: #a78bfa; border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.08); }
+    .badge .dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.2); flex-shrink:0; }
+    .badge.active .dot { background:#a78bfa; box-shadow:0 0 6px rgba(167,139,250,0.7); }
+
+    .close-btn {
+      width:28px; height:28px; border-radius:7px;
+      border:1px solid rgba(255,255,255,0.07); background:rgba(255,255,255,0.04);
+      color:rgba(255,255,255,0.4); font-size:11px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition:background 0.15s;
+      -webkit-app-region: no-drag;
+    }
+    .close-btn:hover { background:rgba(239,68,68,0.2); color:#ef4444; }
+
+    /* ── Body ────────────────────────────────────────────────────────────── */
+    .win-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+    .info-banner {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: rgba(167,139,250,0.07); border: 1px solid rgba(167,139,250,0.2);
+      border-radius: 10px; padding: 10px 13px;
+      font-size: 11px; color: rgba(255,255,255,0.6); line-height: 1.5;
+    }
+    .info-banner i { color: #a78bfa; margin-top: 1px; flex-shrink: 0; }
+
+    /* ── Card ────────────────────────────────────────────────────────────── */
+    .card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px; overflow: hidden;
+    }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 13px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .card-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.85);
+    }
+    .card-icon {
+      width:24px; height:24px; border-radius:6px;
+      display:flex; align-items:center; justify-content:center; font-size:10px;
+    }
+    .cv .card-icon  { background:rgba(96,165,250,0.18); color:#60a5fa; }
+    .jd .card-icon  { background:rgba(52,211,153,0.18); color:#34d399; }
+
+    .chip {
+      font-size:9px; font-weight:700; padding:2px 8px;
+      border-radius:20px; border:1px solid;
+    }
+    .chip.empty  { color:rgba(255,255,255,0.28); border-color:rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); }
+    .chip.loaded { color:#34d399; border-color:rgba(52,211,153,0.3); background:rgba(52,211,153,0.08); }
+
+    .btn-clear {
+      display: none; align-items:center; gap:4px;
+      padding:3px 8px; border-radius:6px;
+      border:1px solid rgba(239,68,68,0.2); background:rgba(239,68,68,0.05);
+      color:rgba(239,68,68,0.65); font-size:10px; cursor:pointer;
+      transition:background 0.15s;
+    }
+    .btn-clear:hover { background:rgba(239,68,68,0.15); color:#f87171; }
+    .btn-clear.show { display:flex; }
+
+    .card-body { padding: 10px 13px 12px; }
+
+    textarea {
+      width:100%; min-height:90px; max-height:180px;
+      background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09);
+      border-radius:8px; padding:9px 11px;
+      color:rgba(255,255,255,0.8); font-size:11px; font-family:inherit;
+      line-height:1.6; resize:vertical; outline:none;
+      transition:border-color 0.15s;
+      -webkit-app-region: no-drag;
+    }
+    textarea::placeholder { color:rgba(255,255,255,0.2); }
+    textarea:focus { border-color:rgba(167,139,250,0.4); }
+
+    /* ── Status ──────────────────────────────────────────────────────────── */
+    .status-row {
+      display:flex; align-items:center; gap:7px;
+      padding:6px 11px;
+      background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+      border-radius:8px; font-size:10px; color:rgba(255,255,255,0.38);
+    }
+    .status-row.ok  { color:#34d399; border-color:rgba(52,211,153,0.2); }
+    .status-row.err { color:#f87171; border-color:rgba(239,68,68,0.2); }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    .win-footer {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 14px 13px;
+      border-top:1px solid rgba(255,255,255,0.06); gap:10px;
+    }
+    .btn-clear-all {
+      display:flex; align-items:center; gap:6px;
+      padding:7px 13px; border-radius:9px;
+      border:1px solid rgba(239,68,68,0.2); background:rgba(239,68,68,0.06);
+      color:rgba(239,68,68,0.6); font-size:11px; font-weight:600; cursor:pointer;
+      transition:background 0.15s; -webkit-app-region:no-drag;
+    }
+    .btn-clear-all:hover { background:rgba(239,68,68,0.15); color:#f87171; }
+
+    .btn-save {
+      display:flex; align-items:center; gap:7px;
+      padding:8px 22px; border-radius:9px;
+      border:1px solid rgba(167,139,250,0.35); background:rgba(167,139,250,0.12);
+      color:#c4b5fd; font-size:12px; font-weight:700; cursor:pointer;
+      transition:background 0.15s, transform 0.1s;
+      -webkit-app-region:no-drag;
+    }
+    .btn-save:hover { background:rgba(167,139,250,0.22); }
+    .btn-save:active { transform:scale(0.97); }
+    .btn-save.saved { color:#34d399; border-color:rgba(52,211,153,0.35); background:rgba(52,211,153,0.1); }
+
+    .footer-hint { font-size:10px; color:rgba(255,255,255,0.28); flex:1; }
+    .footer-hint span { color:rgba(167,139,250,0.65); font-weight:600; }
+
+    /* ── Toast ───────────────────────────────────────────────────────────── */
+    .toast {
+      position:fixed; bottom:14px; left:50%;
+      transform:translateX(-50%) translateY(14px);
+      background:rgba(18,18,28,0.97); border:1px solid rgba(255,255,255,0.1);
+      border-radius:10px; color:#fff; font-size:12px; font-weight:600;
+      padding:7px 18px; pointer-events:none; opacity:0;
+      transition:opacity 0.2s, transform 0.2s; white-space:nowrap; z-index:9999;
+    }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .toast.ok  { border-color:rgba(52,211,153,0.4);  color:#6ee7b7; }
+    .toast.err { border-color:rgba(239,68,68,0.4);   color:#f87171; }
+  </style>
+</head>
+<body>
+<div class="window">
+
+  <!-- Header -->
+  <div class="win-header">
+    <div class="win-title">
+      <i class="fas fa-briefcase"></i> Interview Prep
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag">
+      <div class="badge" id="badge">
+        <span class="dot"></span><span id="badgeTxt">No context</span>
+      </div>
+      <button class="close-btn" id="closeBtn"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="win-body">
+
+    <div class="info-banner">
+      <i class="fas fa-circle-info"></i>
+      <span>Paste your CV and the Job Description below. The AI will use them to give personalised answers throughout your interview.</span>
+    </div>
+
+    <!-- CV -->
+    <div class="card cv">
+      <div class="card-head">
+        <div class="card-title">
+          <div class="card-icon"><i class="fas fa-id-card"></i></div>
+          Resume / CV
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="chip empty" id="cvChip">Not loaded</span>
+          <button class="btn-clear" id="cvClear"><i class="fas fa-trash"></i> Clear</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <textarea id="cvTA" placeholder="Paste your full CV / resume text here…" rows="4"></textarea>
+      </div>
+    </div>
+
+    <!-- JD -->
+    <div class="card jd">
+      <div class="card-head">
+        <div class="card-title">
+          <div class="card-icon"><i class="fas fa-file-lines"></i></div>
+          Job Description
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="chip empty" id="jdChip">Not loaded</span>
+          <button class="btn-clear" id="jdClear"><i class="fas fa-trash"></i> Clear</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <textarea id="jdTA" placeholder="Paste the job description here…" rows="4"></textarea>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="status-row" id="statusRow">
+      <i class="fas fa-circle-dot"></i>
+      <span id="statusTxt">Paste your CV and/or JD above, then click Save Context.</span>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="win-footer">
+    <button class="btn-clear-all" id="clearAll">
+      <i class="fas fa-rotate-left"></i> Clear all
+    </button>
+    <div class="footer-hint">Used for <span>all AI responses</span></div>
+    <button class="btn-save" id="saveBtn">
+      <i class="fas fa-check"></i> Save Context
+    </button>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const api = window.electronAPI;
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = `toast show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function setStatus(msg, cls = '') {
+  $('statusRow').className = `status-row ${cls}`;
+  $('statusTxt').textContent = msg;
+}
+
+function updateBadge() {
+  const cv = $('cvTA').value.trim();
+  const jd = $('jdTA').value.trim();
+  const b = $('badge');
+  b.className = `badge ${(cv || jd) ? 'active' : ''}`;
+  $('badgeTxt').textContent = cv && jd ? 'CV + JD loaded'
+    : cv ? 'CV loaded' : jd ? 'JD loaded' : 'No context';
+}
+
+function refreshChip(taId, chipId, clearId) {
+  const has = !!$(taId).value.trim();
+  $(chipId).textContent = has ? 'Loaded' : 'Not loaded';
+  $(chipId).className = `chip ${has ? 'loaded' : 'empty'}`;
+  $(clearId).className = `btn-clear ${has ? 'show' : ''}`;
+  updateBadge();
+}
+
+// ── Live textarea updates ─────────────────────────────────────────────────────
+$('cvTA').addEventListener('input', () => refreshChip('cvTA', 'cvChip', 'cvClear'));
+$('jdTA').addEventListener('input', () => refreshChip('jdTA', 'jdChip', 'jdClear'));
+
+// ── Clear buttons ─────────────────────────────────────────────────────────────
+$('cvClear').addEventListener('click', () => {
+  $('cvTA').value = '';
+  refreshChip('cvTA', 'cvChip', 'cvClear');
+  setStatus('CV cleared.');
+});
+$('jdClear').addEventListener('click', () => {
+  $('jdTA').value = '';
+  refreshChip('jdTA', 'jdChip', 'jdClear');
+  setStatus('JD cleared.');
+});
+$('clearAll').addEventListener('click', () => {
+  $('cvTA').value = ''; $('jdTA').value = '';
+  refreshChip('cvTA', 'cvChip', 'cvClear');
+  refreshChip('jdTA', 'jdChip', 'jdClear');
+  if (api && api.clearInterviewContext) api.clearInterviewContext();
+  setStatus('All context cleared.');
+  toast('Context cleared', 'ok');
+});
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+$('saveBtn').addEventListener('click', async () => {
+  const cv = $('cvTA').value.trim();
+  const jd = $('jdTA').value.trim();
+  if (!cv && !jd) {
+    setStatus('Please paste at least a CV or JD first.', 'err');
+    toast('Nothing to save yet', 'err');
+    return;
+  }
+  try {
+    if (api && api.saveInterviewContext) {
+      await api.saveInterviewContext({ cv, jd });
+    }
+    setStatus('Context saved — AI will use it for all responses.', 'ok');
+    toast('Saved! AI is now using your context.', 'ok');
+    const btn = $('saveBtn');
+    btn.classList.add('saved');
+    btn.innerHTML = '<i class="fas fa-check-circle"></i> Saved!';
+    setTimeout(() => {
+      btn.classList.remove('saved');
+      btn.innerHTML = '<i class="fas fa-check"></i> Save Context';
+    }, 2000);
+  } catch (err) {
+    setStatus('Save failed: ' + err.message, 'err');
+    toast('Save failed: ' + err.message, 'err');
+  }
+});
+
+// ── Close ─────────────────────────────────────────────────────────────────────
+$('closeBtn').addEventListener('click', () => {
+  if (api && api.hideInterviewPrep) {
+    api.hideInterviewPrep();
+  } else {
+    window.close();
+  }
+});
+
+// ── Load existing context on open ─────────────────────────────────────────────
+(async () => {
+  if (!api || !api.getInterviewContext) return;
+  try {
+    const ctx = await api.getInterviewContext();
+    if (ctx && ctx.cv) { $('cvTA').value = ctx.cv; refreshChip('cvTA', 'cvChip', 'cvClear'); }
+    if (ctx && ctx.jd) { $('jdTA').value = ctx.jd; refreshChip('jdTA', 'jdChip', 'jdClear'); }
+    if (ctx && (ctx.cv || ctx.jd)) setStatus('Previous context loaded.', 'ok');
+  } catch (e) { /* ignore */ }
+})();
+</script>
+</body>
+</html>

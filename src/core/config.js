@@ -41,12 +41,12 @@ class ConfigManager {
       llm: {
         openai: {
           model: 'gpt-4o-mini',
-          maxRetries: 1,
-          timeout: 15000,
+          maxRetries: 2,
+          timeout: 20000,
           fallbackEnabled: true,
           generation: {
             temperature: 0.7,
-            max_tokens: 1024
+            max_tokens: 2048,
           }
         }
       },

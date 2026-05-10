@@ -32,7 +32,7 @@ class WindowManager {
     
     this.windowConfigs = {
       main: {
-        width: 216,
+        width: 240,
         height: 240,
         useContentSize: true,
         file: 'index.html',
@@ -67,6 +67,22 @@ class WindowManager {
         alwaysOnTop: true,
         visibleOnAllWorkspaces: true,
         fullscreenable: false
+      },
+      interviewPrep: {
+        width: 540,
+        height: 680,
+        file: 'interview-prep.html',
+        title: 'Interview Prep',
+        frame: false,
+        transparent: false,
+        skipTaskbar: false,
+        resizable: true,
+        minimizable: false,
+        maximizable: false,
+        closable: true,
+        alwaysOnTop: true,
+        visibleOnAllWorkspaces: true,
+        fullscreenable: false
       }
     };
 
@@ -91,6 +107,7 @@ class WindowManager {
       await this.createChatWindow();
       await this.createLLMResponseWindow();
       await this.createSettingsWindow();
+      await this.createInterviewPrepWindow();
       
       this.setupWindowEventHandlers();
       this.setupScreenTracking();
@@ -192,6 +209,21 @@ class WindowManager {
     return window;
   }
 
+  async createInterviewPrepWindow() {
+    if (this.windows.has('interviewPrep')) {
+      return this.windows.get('interviewPrep');
+    }
+    const window = await this.createWindow('interviewPrep');
+    window.webContents.on('console-message', (event, level, message) => {
+      if (message && message.includes('INTERVIEW-PREP')) {
+        logger.info(`[INTERVIEW-PREP] ${message}`);
+      }
+    });
+    this.windows.set('interviewPrep', window);
+    window.hide();
+    return window;
+  }
+
   async createWindow(type, showOnCreate = false) {
     const windowConfig = this.windowConfigs[type];
     if (!windowConfig) {
@@ -256,9 +288,9 @@ class WindowManager {
         titleBarOverlay: false,
         transparent: true,
         backgroundColor: '#00000000',
-  resizable: false,
-    minWidth: this.windowConfigs.main.width,
-    maxWidth: this.windowConfigs.main.width,
+        resizable: false,
+        minWidth: this.windowConfigs.main.width,
+        maxWidth: 1400,
         minimizable: false,
         maximizable: false,
         closable: false,
@@ -320,6 +352,26 @@ class WindowManager {
           acceptFirstMouse: true
         }),
         level: process.platform === 'darwin' ? 'floating' : undefined,
+      };
+    } else if (type === 'interviewPrep') {
+      // NOT transparent — solid background so Windows hit-testing always works
+      browserWindowOptions = {
+        ...baseOptions,
+        frame: false,
+        titleBarStyle: 'hidden',
+        transparent: false,
+        resizable: true,
+        minimizable: false,
+        maximizable: false,
+        closable: true,
+        hasShadow: true,
+        backgroundColor: '#0d0d14',
+        level: process.platform === 'darwin' ? 'floating' : undefined,
+        ...(process.platform === 'darwin' && {
+          type: 'panel',
+          acceptFirstMouse: true,
+          disableAutoHideCursor: true
+        })
       };
     } else {
       // Other windows (skills)
@@ -932,11 +984,12 @@ class WindowManager {
     
     this.windows.forEach((window, type) => {
       if (!window.isDestroyed()) {
-        if (interactive) {
-          // Interactive mode: allow mouse events for all windows
+        if (type === 'interviewPrep') {
+          // Interview prep window is always clickable — never make it click-through
+          window.setIgnoreMouseEvents(false);
+        } else if (interactive) {
           window.setIgnoreMouseEvents(false);
         } else {
-          // Non-interactive mode: enable click-through with forwarding for all windows
           window.setIgnoreMouseEvents(true, { forward: true });
         }
         window.webContents.send('interaction-mode-changed', interactive);
@@ -1106,26 +1159,20 @@ class WindowManager {
       return;
     }
 
-    logger.debug('Sending display-llm-response event to window');
-    llmWindow.webContents.send('display-llm-response', {
-      content,
-      metadata,
-      timestamp: new Date().toISOString()
-    });
-    
-    logger.debug('Showing and focusing LLM window');
-    this.showOnCurrentDesktop(llmWindow);
-    
-    // Position bound windows when LLM response is shown
-    if (this.bindWindows) {
-      this.positionBoundWindows();
+    const payload = { content, metadata, timestamp: new Date().toISOString() };
+
+    // Send to LLM window (kept hidden — no popup)
+    llmWindow.webContents.send('display-llm-response', payload);
+
+    // Also relay to main window so the inline chat panel can display it
+    const mainWindow = this.windows.get('main');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('inline-llm-response', payload);
     }
-        
-    logger.info('LLM response displayed', {
+
+    logger.info('LLM response relayed to inline panel', {
       contentLength: content.length,
-      skill: metadata.skill,
-      windowVisible: llmWindow.isVisible(),
-      boundWindows: this.bindWindows
+      skill: metadata.skill
     });
   }
 
@@ -1137,16 +1184,16 @@ class WindowManager {
 
     const llmWindow = this.windows.get('llmResponse');
     if (llmWindow) {
-      logger.debug('Showing LLM loading state');
+      // Keep LLM window hidden — send loading event but don't show the window
       llmWindow.webContents.send('show-loading');
-      this.showOnCurrentDesktop(llmWindow);
-      
-      // Position bound windows when LLM loading is shown
-      if (this.bindWindows) {
-        this.positionBoundWindows();
+
+      // Relay loading state to the main window inline panel
+      const mainWindow = this.windows.get('main');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('inline-llm-loading');
       }
-      
-      logger.debug('LLM loading window shown');
+
+      logger.debug('LLM loading relayed to inline panel');
     } else {
       logger.error('LLM window not available for loading state');
     }
@@ -1180,6 +1227,26 @@ class WindowManager {
     const settingsWindow = this.windows.get('settings');
     if (settingsWindow) {
       settingsWindow.hide();
+    }
+  }
+
+  showInterviewPrep() {
+    if (this.isScreenBeingShared) return;
+    const win = this.windows.get('interviewPrep');
+    if (win) {
+      this.showOnCurrentDesktop(win);
+      this.centerWindow(win);
+      // Always interactive — must be called after show so the handle is active
+      win.setIgnoreMouseEvents(false);
+      win.focus();
+      logger.info('Interview prep window displayed');
+    }
+  }
+
+  hideInterviewPrep() {
+    const win = this.windows.get('interviewPrep');
+    if (win) {
+      win.hide();
     }
   }
 
@@ -1565,11 +1632,10 @@ class WindowManager {
   }
 
   showChatWindow() {
-    const chatWindow = this.windows.get('chat');
-    if (chatWindow && !chatWindow.isDestroyed()) {
-      this.showOnCurrentDesktop(chatWindow);
-      logger.debug('Chat window shown');
-    }
+    // Chat is now embedded inline in the main panel — keep this window hidden.
+    // It still receives IPC events (recording-command, transcriptions etc.)
+    // for audio capture in the background.
+    logger.debug('showChatWindow suppressed — using inline chat panel');
   }
 
   hideChatWindow() {
@@ -1590,10 +1656,11 @@ class WindowManager {
 
   handleRecordingStopped() {
     this.isRecording = false;
-    this.hideChatWindow();
-    // Notify all windows about recording state
+    // Don't hide the chat window here -- the transcription buffer is about to be
+    // flushed to the LLM and the response will be displayed in the chat window.
+    // _flushTranscriptionBuffer() handles hiding the chat if the buffer was empty.
     this.broadcastToAllWindows('recording-stopped');
-    logger.debug('Recording stopped, chat window hidden');
+    logger.debug('Recording stopped, keeping chat window open for LLM response');
   }
 
   broadcastSkillChange(skill) {

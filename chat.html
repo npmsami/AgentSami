@@ -1189,6 +1189,21 @@
           }
         });
       }
+
+      // Listen for audio source change from the main panel's toggle button
+      if (whysperAPI && whysperAPI.onAudioSourceChanged) {
+        whysperAPI.onAudioSourceChanged((event, data) => {
+          if (!data || !data.source) return;
+          _audioSource = data.source;
+          if (_audioSource === 'system') {
+            if (audioSourceLabel) audioSourceLabel.textContent = 'SYS';
+            if (audioSourceBtn) audioSourceBtn.style.color = '#4fc3f7';
+          } else {
+            if (audioSourceLabel) audioSourceLabel.textContent = 'MIC';
+            if (audioSourceBtn) audioSourceBtn.style.color = '';
+          }
+        });
+      }
       // ─────────────────────────────────────────────────────────────────────
 
       // ── Web Audio API audio capture (mic or system) ───────────────────────

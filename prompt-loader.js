@@ -353,6 +353,11 @@ STRICT REQUIREMENTS:
       'build-engineering': 'devops',
       'automation-engineering': 'devops',
 
+      // AI Specialist group → ai-specialist.md
+      'ai-specialist': 'ai-specialist',
+      'ai-engineering': 'ai-specialist',
+      'ai-automation': 'ai-specialist',
+
       // Systems / Performance / Operations group → systems-engineering.md
       'systems-engineering': 'systems-engineering',
       'performance-engineering': 'systems-engineering',

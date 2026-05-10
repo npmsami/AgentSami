@@ -15,8 +15,9 @@ class MainWindowUI {
         this.skillIndicator = null;
         this.micButton = null;
         this.isRecording = false;
-        this.speechAvailable = false; // track availability
-    this._popoverHideTimeout = null;
+        this.speechAvailable = false;
+        this._audioSource = 'mic'; // 'mic' or 'system'
+        this._popoverHideTimeout = null;
         
         // Define available skills for navigation
         this.availableSkills = [
@@ -40,6 +41,7 @@ class MainWindowUI {
             'performance-engineering',
             'reliability-engineering',
             'operations-engineering',
+            'ai-specialist',
         ];
         
         this.init();
@@ -150,6 +152,10 @@ class MainWindowUI {
         this.updateSkillIndicatorState();
         this.updateMicButtonState();
         this.updateSettingsIndicatorState();
+        if (this.interviewPrepBtn) {
+            this.interviewPrepBtn.disabled = !this.isInteractive;
+            this.interviewPrepBtn.style.opacity = this.isInteractive ? '' : '0.5';
+        }
     }
 
     updateStatusDot() {
@@ -251,29 +257,32 @@ class MainWindowUI {
     }
 
     resizeWindowToContent() {
-        // Wait for DOM to fully render
         setTimeout(() => {
-            const commandTab = document.querySelector('.panel') || document.querySelector('.command-tab');
-            if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
-                const rect = commandTab.getBoundingClientRect();
-                const width = Math.ceil(rect.width);
-                let height = Math.ceil(rect.height);
+            if (!window.electronAPI || !window.electronAPI.resizeWindow) return;
 
-                // If shortcuts popover is visible, extend width to include it
-                if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
-                    const popRect = this.shortcutsPopover.getBoundingClientRect();
-                    // popover is positioned to the right in new design
-                    height = Math.max(height, Math.ceil(popRect.height + 16));
-                }
-                
-                logger.debug('Resizing window to content', {
-                    width,
-                    height,
-                    component: 'MainWindowUI'
-                });
-                
-                window.electronAPI.resizeWindow(width, height);
+            const panel = document.querySelector('.panel');
+            const chatPanel = document.getElementById('chatPanel');
+
+            if (!panel) return;
+
+            const panelW = panel.scrollWidth || panel.offsetWidth;
+            const panelH = panel.scrollHeight || panel.offsetHeight;
+
+            let totalW = panelW;
+            let totalH = panelH;
+
+            if (chatPanel) {
+                const chatW = chatPanel.offsetWidth;
+                // Use offsetHeight (the CSS-clamped rendered height) NOT scrollHeight.
+                // scrollHeight ignores max-height and would make the window grow forever,
+                // preventing #inlineMsgs from ever needing its own internal scroll.
+                const chatH = chatPanel.offsetHeight;
+                totalW = panelW + 8 + chatW; // 8px gap
+                totalH = Math.max(panelH, chatH);
             }
+
+            logger.debug('Resizing window to content', { totalW, totalH, component: 'MainWindowUI' });
+            window.electronAPI.resizeWindow(Math.ceil(totalW), Math.ceil(totalH));
         }, 100);
     }
 
@@ -282,8 +291,9 @@ class MainWindowUI {
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
-    this.infoButton = document.getElementById('infoButton');
-    this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.infoButton = document.getElementById('infoButton');
+        this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.interviewPrepBtn = document.getElementById('interviewPrepBtn');
 
         this.screenshotButton = document.getElementById('screenshotButton');
 
@@ -324,16 +334,58 @@ class MainWindowUI {
             });
         }
 
-        // Add click handler for microphone
+        // Interview Prep panel (embedded in main window — no separate window needed)
+        if (this.interviewPrepBtn) {
+            this.interviewPrepBtn.addEventListener('click', () => {
+                this.togglePrepSection();
+            });
+            this.checkInterviewContextStatus();
+        }
+
+        const prepSaveBtn = document.getElementById('prepSaveBtn');
+        const prepClearBtn = document.getElementById('prepClearBtn');
+        if (prepSaveBtn) {
+            prepSaveBtn.addEventListener('click', () => this.savePrepContext());
+        }
+        if (prepClearBtn) {
+            prepClearBtn.addEventListener('click', () => this.clearPrepContext());
+        }
+
+        // Mic button — open inline chat then start/stop recording
         this.micButton.addEventListener('click', () => {
             if (this.isInteractive) {
                 if (this.isRecording) {
                     window.electronAPI.stopSpeechRecognition();
                 } else {
+                    this.openChatSection();
                     window.electronAPI.startSpeechRecognition();
                 }
             }
         });
+
+        // Inline chat: send button + Enter key
+        const inlineSend = document.getElementById('inlineSend');
+        const inlineChatInput = document.getElementById('inlineChatInput');
+        const chatClearBtn = document.getElementById('chatClearBtn');
+        const audioSourceBtn = document.getElementById('audioSourceBtn');
+        if (inlineSend) inlineSend.addEventListener('click', () => this.sendInlineMessage());
+        if (chatClearBtn) chatClearBtn.addEventListener('click', () => this.clearInlineChat());
+        if (audioSourceBtn) audioSourceBtn.addEventListener('click', () => this.toggleAudioSource());
+        if (inlineChatInput) {
+            inlineChatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendInlineMessage();
+                }
+            });
+            inlineChatInput.addEventListener('input', () => {
+                inlineChatInput.style.height = 'auto';
+                inlineChatInput.style.height = Math.min(inlineChatInput.scrollHeight, 90) + 'px';
+            });
+        }
+
+        // Set up all inline chat IPC listeners
+        this.initInlineChatListeners();
 
         // Language dropdown
         this.languageSelect = document.getElementById('codingLanguage');
@@ -531,6 +583,7 @@ class MainWindowUI {
             'performance-engineering': 'Performance',
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
+            'ai-specialist': 'AI Specialist',
         };
         
         const displaySkill = skillNames[skill] || skill.toUpperCase();
@@ -690,6 +743,7 @@ class MainWindowUI {
             'performance-engineering': 'Performance',
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
+            'ai-specialist': 'AI Specialist',
         };
         
         logger.info('Updating skill indicator', {
@@ -810,6 +864,7 @@ class MainWindowUI {
             'performance-engineering': 'Performance',
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
+            'ai-specialist': 'AI Specialist',
         };
         
         const displayName = skillNames[skill] || skill.toUpperCase();
@@ -913,6 +968,411 @@ class MainWindowUI {
             message,
             type
         });
+    }
+
+    // ── Inline Chat / Response Panel ───────────────────────────────────────────
+
+    openChatSection() {
+        // Chat section is always visible — just scroll to bottom
+        this._scrollInlineMsgs();
+    }
+
+    closeChatSection() {
+        // No-op — chat section stays visible
+    }
+
+    _scrollInlineMsgs() {
+        const msgs = document.getElementById('inlineMsgs');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    _hideEmptyState() {
+        const empty = document.getElementById('chatEmpty');
+        if (empty) empty.style.display = 'none';
+    }
+
+    _addInlineMsg(text, type = 'assistant') {
+        const msgs = document.getElementById('inlineMsgs');
+        if (!msgs) return null;
+        this._hideEmptyState();
+        const div = document.createElement('div');
+        div.className = `im im-${type}`;
+        if (type === 'thinking') {
+            div.innerHTML = '<span class="thinking-dots"><span>•</span><span>•</span><span>•</span></span>';
+        } else {
+            div.textContent = text;
+        }
+        msgs.appendChild(div);
+        this._scrollInlineMsgs();
+        // Grow the Electron window so the chat panel and input are always fully visible.
+        this.resizeWindowToContent();
+        return div;
+    }
+
+    clearInlineChat() {
+        const msgs = document.getElementById('inlineMsgs');
+        if (!msgs) return;
+        msgs.innerHTML = `<div class="chat-empty" id="chatEmpty">
+            <i class="fas fa-microphone-lines"></i>
+            <span>Press <strong>Alt+R</strong> to record,<br>take a screenshot, or type below.</span>
+        </div>`;
+        if (this._dedupeSet) this._dedupeSet.clear();
+        this._streamingDiv = null;
+        this._interimDiv = null;
+    }
+
+    _renderInlineMarkdown(text) {
+        const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        // Split on fenced code blocks so they are rendered separately from prose.
+        // Using a capturing group keeps the delimiters in the parts array.
+        const parts = text.split(/(```[a-z]*\n?[\s\S]*?```)/g);
+
+        return parts.map((part) => {
+            // ── Fenced code block ─────────────────────────────────────────────
+            const cb = part.match(/^```([a-z]*)\n?([\s\S]*?)```$/);
+            if (cb) {
+                const lang = cb[1] || '';
+                const code = esc(cb[2] || '').trim();
+                const header = lang
+                    ? `<div style="padding:2px 10px;background:rgba(0,0,0,0.4);border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:rgba(79,195,247,0.8);">${lang}</div>`
+                    : '';
+                return `<div style="margin:6px 0;border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,0.10);">${header}<pre style="margin:0;padding:9px 11px;background:rgba(0,0,0,0.45);font-family:'Consolas','Fira Code',monospace;font-size:11.5px;line-height:1.55;color:rgba(255,255,255,0.88);overflow-x:auto;white-space:pre;">${code}</pre></div>`;
+            }
+
+            // ── Regular prose ─────────────────────────────────────────────────
+            return esc(part)
+                // headings
+                .replace(/^### (.+)$/gm, '<strong style="font-size:13px;color:rgba(167,139,250,0.9);">$1</strong>')
+                .replace(/^## (.+)$/gm,  '<strong style="font-size:14px;color:rgba(167,139,250,1);">$1</strong>')
+                .replace(/^# (.+)$/gm,   '<strong style="font-size:15px;color:#fff;">$1</strong>')
+                // bold / italic
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                // inline code
+                .replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.35);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:11px;color:rgba(79,195,247,0.9);">$1</code>')
+                // bullet points
+                .replace(/^[\-\*] (.+)$/gm, '<span style="display:block;padding-left:12px;">• $1</span>')
+                // newlines
+                .replace(/\n/g, '<br>');
+        }).join('');
+    }
+
+    _addInlineMsgHTML(html, type = 'assistant') {
+        const msgs = document.getElementById('inlineMsgs');
+        if (!msgs) return null;
+        this._hideEmptyState();
+        const div = document.createElement('div');
+        div.className = `im im-${type}`;
+        div.innerHTML = html;
+        msgs.appendChild(div);
+        this._scrollInlineMsgs();
+        // Grow the Electron window so the chat panel and input are always fully visible.
+        this.resizeWindowToContent();
+        return div;
+    }
+
+    _removeThinking() {
+        const msgs = document.getElementById('inlineMsgs');
+        if (!msgs) return;
+        const thinking = msgs.querySelector('.im-thinking');
+        if (thinking) thinking.remove();
+    }
+
+    _isDupe(text) {
+        if (!this._dedupeSet) this._dedupeSet = new Set();
+        const key = text.trim().slice(0, 120);
+        if (this._dedupeSet.has(key)) return true;
+        this._dedupeSet.add(key);
+        if (this._dedupeSet.size > 60) {
+            this._dedupeSet.delete(this._dedupeSet.values().next().value);
+        }
+        return false;
+    }
+
+    toggleAudioSource() {
+        this._audioSource = this._audioSource === 'mic' ? 'system' : 'mic';
+        const btn = document.getElementById('audioSourceBtn');
+        const lbl = document.getElementById('audioSourceLabel');
+        const isSys = this._audioSource === 'system';
+        if (lbl) lbl.textContent = isSys ? 'SYS' : 'MIC';
+        if (btn) {
+            btn.style.color = isSys ? '#4fc3f7' : '';
+            btn.style.borderColor = isSys ? 'rgba(79,195,247,0.35)' : '';
+            btn.style.background = isSys ? 'rgba(79,195,247,0.10)' : '';
+            btn.title = isSys
+                ? 'Audio source: System Audio (Meet/Teams) — click to switch to Mic'
+                : 'Audio source: Microphone — click to switch to System Audio';
+        }
+        this._addInlineMsg(
+            isSys ? 'Audio source: System Audio (Meet/Teams)' : 'Audio source: Microphone',
+            'system'
+        );
+        if (window.electronAPI && window.electronAPI.setAudioSource) {
+            window.electronAPI.setAudioSource(this._audioSource).catch(() => {});
+        }
+    }
+
+    sendInlineMessage() {
+        const input = document.getElementById('inlineChatInput');
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text) return;
+        this.openChatSection();
+        this._addInlineMsg(text, 'user');
+        input.value = '';
+        input.style.height = 'auto';
+        // Do NOT add a thinking indicator here — the main process sends 'chat-thinking'
+        // immediately, which adds one via onChatThinking. A second one here caused
+        // _removeThinking() to leave a leftover that blocked new streaming divs.
+        if (window.electronAPI && window.electronAPI.sendChatMessage) {
+            window.electronAPI.sendChatMessage(text).catch(() => {});
+        }
+    }
+
+    initInlineChatListeners() {
+        const api = window.electronAPI;
+        if (!api) return;
+
+        // Recording started — show indicator in header
+        api.onRecordingStarted && api.onRecordingStarted(() => {
+            const bar = document.getElementById('recBar');
+            const txt = document.getElementById('recBarTxt');
+            if (bar) bar.style.display = 'flex';
+            if (txt) txt.textContent = 'Listening…';
+        });
+
+        // Recording stopped — update indicator and clear any dangling interim ghost.
+        api.onRecordingStopped && api.onRecordingStopped(() => {
+            const txt = document.getElementById('recBarTxt');
+            if (txt) txt.textContent = 'Processing…';
+            if (this._interimDiv) {
+                this._interimDiv.remove();
+                this._interimDiv = null;
+            }
+        });
+
+        // Live interim speech — single updating div so it doesn't flood the chat.
+        api.onInterimTranscription && api.onInterimTranscription((event, data) => {
+            if (!data || !data.text) return;
+            this._hideEmptyState();
+            const msgs = document.getElementById('inlineMsgs');
+            if (!msgs) return;
+            if (!this._interimDiv) {
+                this._interimDiv = document.createElement('div');
+                this._interimDiv.className = 'im im-interim';
+                msgs.appendChild(this._interimDiv);
+            }
+            this._interimDiv.textContent = data.text.trim();
+            this._scrollInlineMsgs();
+        });
+
+        // Final sentence confirmed — replace the interim ghost with a solid transcription line.
+        api.onTranscriptionReceived && api.onTranscriptionReceived((event, data) => {
+            if (data && data.text) {
+                // Reuse the interim div for this sentence so there's no visual jump.
+                if (this._interimDiv) {
+                    this._interimDiv.className = 'im im-transcription';
+                    this._interimDiv.textContent = data.text.trim();
+                    this._interimDiv = null; // next interim creates a fresh ghost
+                } else {
+                    this._addInlineMsg(data.text.trim(), 'transcription');
+                }
+                this._scrollInlineMsgs();
+            }
+        });
+
+        // AI response to voice input — hide recording bar
+        api.onTranscriptionLlmResponse && api.onTranscriptionLlmResponse((event, data) => {
+            const bar = document.getElementById('recBar');
+            if (bar) bar.style.display = 'none';
+            this._removeThinking();
+
+            // Always capture and clear _streamingDiv FIRST so the next request
+            // always gets a fresh div, regardless of whether we render this response.
+            const sd = this._streamingDiv;
+            this._streamingDiv = null;
+
+            if (data && data.response && !this._isDupe(data.response)) {
+                if (sd) {
+                    // Upgrade the existing streaming div with rendered markdown in-place.
+                    sd.innerHTML = this._renderInlineMarkdown(data.response);
+                    this._scrollInlineMsgs();
+                    this.resizeWindowToContent();
+                } else {
+                    this._addInlineMsgHTML(this._renderInlineMarkdown(data.response), 'assistant');
+                }
+            }
+        });
+
+        // Streaming chunks — use this._streamingDiv exclusively (no local variable).
+        // A local variable would keep pointing to the previous response's div after it
+        // was upgraded in-place, causing all subsequent streams to append to the old element.
+        let _streamResizeDone = false;
+        api.onLlmStreamChunk && api.onLlmStreamChunk((event, data) => {
+            if (data && data.chunk) {
+                this._removeThinking();
+                // Create a fresh streaming div if none exists or the previous one was finalised.
+                if (!this._streamingDiv || !document.getElementById('inlineMsgs')?.contains(this._streamingDiv)) {
+                    this._streamingDiv = this._addInlineMsg('', 'assistant');
+                    _streamResizeDone = false;
+                }
+                if (this._streamingDiv) {
+                    this._streamingDiv.textContent = (this._streamingDiv.textContent || '') + data.chunk;
+                    this._scrollInlineMsgs();
+                    // Resize once per burst so the window grows with content.
+                    if (!_streamResizeDone) {
+                        _streamResizeDone = true;
+                        setTimeout(() => {
+                            this.resizeWindowToContent();
+                            _streamResizeDone = false;
+                        }, 300);
+                    }
+                }
+            }
+        });
+
+        // Thinking indicator (when LLM starts processing typed chat)
+        api.onChatThinking && api.onChatThinking(() => {
+            this.openChatSection();
+            this._addInlineMsg('', 'thinking');
+        });
+
+        // Screenshot / OCR response
+        api.onInlineLlmLoading && api.onInlineLlmLoading(() => {
+            this.openChatSection();
+            this._addInlineMsg('Analyzing screenshot…', 'system');
+        });
+
+        api.onInlineLlmResponse && api.onInlineLlmResponse((event, data) => {
+            this._removeThinking();
+            const sd = this._streamingDiv;
+            this._streamingDiv = null;
+            const content = data && (data.content || data.response);
+            if (content && !this._isDupe(content)) {
+                if (sd) {
+                    sd.innerHTML = this._renderInlineMarkdown(content);
+                    this._scrollInlineMsgs();
+                    this.resizeWindowToContent();
+                } else {
+                    this._addInlineMsgHTML(this._renderInlineMarkdown(content), 'assistant');
+                }
+            }
+        });
+
+        // Also catch the generic llm-response broadcast (screenshot answers)
+        api.onLlmResponse && api.onLlmResponse((event, data) => {
+            this._removeThinking();
+            const sd = this._streamingDiv;
+            this._streamingDiv = null;
+            const content = data && (data.content || data.response);
+            if (content && !this._isDupe(content)) {
+                if (sd) {
+                    sd.innerHTML = this._renderInlineMarkdown(content);
+                    this._scrollInlineMsgs();
+                    this.resizeWindowToContent();
+                } else {
+                    this._addInlineMsgHTML(this._renderInlineMarkdown(content), 'assistant');
+                }
+            }
+        });
+    }
+
+    // ── Interview Prep (embedded panel) ────────────────────────────────────────
+
+    togglePrepSection() {
+        const section = document.getElementById('prepSection');
+        if (!section) return;
+        const isOpen = section.style.display !== 'none';
+        if (isOpen) {
+            section.style.display = 'none';
+            this.interviewPrepBtn.classList.remove('context-loaded');
+            this.checkInterviewContextStatus(); // restore badge if context exists
+        } else {
+            section.style.display = 'block';
+            this.interviewPrepBtn.classList.add('context-loaded');
+            this.loadPrepContext();
+        }
+        setTimeout(() => this.resizeWindowToContent(), 50);
+    }
+
+    async loadPrepContext() {
+        try {
+            if (!window.electronAPI || !window.electronAPI.getInterviewContext) return;
+            const ctx = await window.electronAPI.getInterviewContext();
+            if (ctx) {
+                const cvTA = document.getElementById('prepCvTA');
+                const jdTA = document.getElementById('prepJdTA');
+                if (cvTA && ctx.cv) cvTA.value = ctx.cv;
+                if (jdTA && ctx.jd) jdTA.value = ctx.jd;
+                if (ctx.cv || ctx.jd) this.setPrepStatus('Previous context loaded.', '#34d399');
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    async savePrepContext() {
+        const cvTA = document.getElementById('prepCvTA');
+        const jdTA = document.getElementById('prepJdTA');
+        const cv = cvTA ? cvTA.value.trim() : '';
+        const jd = jdTA ? jdTA.value.trim() : '';
+
+        if (!cv && !jd) {
+            this.setPrepStatus('Paste at least a CV or JD first.', '#f87171');
+            return;
+        }
+        try {
+            if (window.electronAPI && window.electronAPI.saveInterviewContext) {
+                await window.electronAPI.saveInterviewContext({ cv, jd });
+            }
+            this.setPrepStatus('Saved! AI will use this context.', '#34d399');
+            this.checkInterviewContextStatus();
+            const btn = document.getElementById('prepSaveBtn');
+            if (btn) {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> Saved!';
+                btn.style.color = '#34d399';
+                setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+            }
+        } catch (err) {
+            this.setPrepStatus('Error: ' + err.message, '#f87171');
+        }
+    }
+
+    async clearPrepContext() {
+        const cvTA = document.getElementById('prepCvTA');
+        const jdTA = document.getElementById('prepJdTA');
+        if (cvTA) cvTA.value = '';
+        if (jdTA) jdTA.value = '';
+        try {
+            if (window.electronAPI && window.electronAPI.clearInterviewContext) {
+                await window.electronAPI.clearInterviewContext();
+            }
+        } catch (e) { /* ignore */ }
+        this.setPrepStatus('Context cleared.', 'rgba(255,255,255,0.38)');
+        this.checkInterviewContextStatus();
+    }
+
+    setPrepStatus(msg, color) {
+        const txt = document.getElementById('prepStatusTxt');
+        const row = document.getElementById('prepStatus');
+        if (txt) txt.textContent = msg;
+        if (row) row.style.color = color || 'rgba(255,255,255,0.38)';
+    }
+
+    async checkInterviewContextStatus() {
+        try {
+            if (!window.electronAPI || !window.electronAPI.getInterviewContext) return;
+            const ctx = await window.electronAPI.getInterviewContext();
+            const hasContext = ctx && (ctx.cv || ctx.jd);
+            if (this.interviewPrepBtn) {
+                this.interviewPrepBtn.classList.toggle('context-loaded', !!hasContext);
+                this.interviewPrepBtn.title = hasContext
+                    ? 'Interview context loaded — click to update'
+                    : 'Upload CV & Job Description';
+            }
+        } catch (e) {
+            // Non-critical, ignore
+        }
     }
 
     async showGeminiConfig() {
