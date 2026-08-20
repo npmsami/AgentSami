@@ -18,6 +18,7 @@ class MainWindowUI {
         this.speechAvailable = false;
         this._audioSource = 'mic'; // 'mic' or 'system'
         this._popoverHideTimeout = null;
+        this._userScrolledUp = false;
         
         // Define available skills for navigation
         this.availableSkills = [
@@ -42,6 +43,7 @@ class MainWindowUI {
             'reliability-engineering',
             'operations-engineering',
             'ai-specialist',
+            'backend-engineering',
         ];
         
         this.init();
@@ -584,6 +586,7 @@ class MainWindowUI {
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
             'ai-specialist': 'AI Specialist',
+            'backend-engineering': 'Backend Eng',
         };
         
         const displaySkill = skillNames[skill] || skill.toUpperCase();
@@ -744,6 +747,7 @@ class MainWindowUI {
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
             'ai-specialist': 'AI Specialist',
+            'backend-engineering': 'Backend Eng',
         };
         
         logger.info('Updating skill indicator', {
@@ -865,6 +869,7 @@ class MainWindowUI {
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
             'ai-specialist': 'AI Specialist',
+            'backend-engineering': 'Backend Eng',
         };
         
         const displayName = skillNames[skill] || skill.toUpperCase();
@@ -973,7 +978,7 @@ class MainWindowUI {
     // ── Inline Chat / Response Panel ───────────────────────────────────────────
 
     openChatSection() {
-        // Chat section is always visible — just scroll to bottom
+        // Chat section is always visible — scroll only if user is already at the bottom
         this._scrollInlineMsgs();
     }
 
@@ -981,9 +986,34 @@ class MainWindowUI {
         // No-op — chat section stays visible
     }
 
-    _scrollInlineMsgs() {
+    _setupInlineMsgsScrollTracking() {
         const msgs = document.getElementById('inlineMsgs');
-        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+        if (!msgs || msgs.dataset.scrollTracking === '1') return;
+        msgs.dataset.scrollTracking = '1';
+        msgs.addEventListener('scroll', () => {
+            const distFromBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight;
+            // Within 40px of the bottom counts as "at bottom" — re-enable auto-scroll
+            this._userScrolledUp = distFromBottom > 40;
+        });
+    }
+
+    _scrollInlineMsgs(force = false) {
+        const msgs = document.getElementById('inlineMsgs');
+        if (!msgs) return;
+        if (force) this._userScrolledUp = false;
+        if (force || !this._userScrolledUp) {
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+    }
+
+    _scrollInlineMsgToTop(element) {
+        const msgs = document.getElementById('inlineMsgs');
+        if (!msgs || !element) return;
+        const targetTop = Math.max(0, element.offsetTop - msgs.offsetTop - 8);
+        msgs.scrollTop = targetTop;
+        // Treat this as an intentional read position so streaming chunks do not
+        // pull the viewport down while the first lines are being read.
+        this._userScrolledUp = true;
     }
 
     _hideEmptyState() {
@@ -1119,6 +1149,7 @@ class MainWindowUI {
         const text = input.value.trim();
         if (!text) return;
         this.openChatSection();
+        this._userScrolledUp = false;
         this._addInlineMsg(text, 'user');
         input.value = '';
         input.style.height = 'auto';
@@ -1133,6 +1164,8 @@ class MainWindowUI {
     initInlineChatListeners() {
         const api = window.electronAPI;
         if (!api) return;
+
+        this._setupInlineMsgsScrollTracking();
 
         // Recording started — show indicator in header
         api.onRecordingStarted && api.onRecordingStarted(() => {
@@ -1197,10 +1230,10 @@ class MainWindowUI {
                 if (sd) {
                     // Upgrade the existing streaming div with rendered markdown in-place.
                     sd.innerHTML = this._renderInlineMarkdown(data.response);
-                    this._scrollInlineMsgs();
                     this.resizeWindowToContent();
                 } else {
-                    this._addInlineMsgHTML(this._renderInlineMarkdown(data.response), 'assistant');
+                    const div = this._addInlineMsgHTML(this._renderInlineMarkdown(data.response), 'assistant');
+                    this._scrollInlineMsgToTop(div);
                 }
             }
         });
@@ -1215,11 +1248,11 @@ class MainWindowUI {
                 // Create a fresh streaming div if none exists or the previous one was finalised.
                 if (!this._streamingDiv || !document.getElementById('inlineMsgs')?.contains(this._streamingDiv)) {
                     this._streamingDiv = this._addInlineMsg('', 'assistant');
+                    this._scrollInlineMsgToTop(this._streamingDiv);
                     _streamResizeDone = false;
                 }
                 if (this._streamingDiv) {
                     this._streamingDiv.textContent = (this._streamingDiv.textContent || '') + data.chunk;
-                    this._scrollInlineMsgs();
                     // Resize once per burst so the window grows with content.
                     if (!_streamResizeDone) {
                         _streamResizeDone = true;
@@ -1252,10 +1285,10 @@ class MainWindowUI {
             if (content && !this._isDupe(content)) {
                 if (sd) {
                     sd.innerHTML = this._renderInlineMarkdown(content);
-                    this._scrollInlineMsgs();
                     this.resizeWindowToContent();
                 } else {
-                    this._addInlineMsgHTML(this._renderInlineMarkdown(content), 'assistant');
+                    const div = this._addInlineMsgHTML(this._renderInlineMarkdown(content), 'assistant');
+                    this._scrollInlineMsgToTop(div);
                 }
             }
         });
@@ -1269,10 +1302,10 @@ class MainWindowUI {
             if (content && !this._isDupe(content)) {
                 if (sd) {
                     sd.innerHTML = this._renderInlineMarkdown(content);
-                    this._scrollInlineMsgs();
                     this.resizeWindowToContent();
                 } else {
-                    this._addInlineMsgHTML(this._renderInlineMarkdown(content), 'assistant');
+                    const div = this._addInlineMsgHTML(this._renderInlineMarkdown(content), 'assistant');
+                    this._scrollInlineMsgToTop(div);
                 }
             }
         });

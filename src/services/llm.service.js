@@ -14,6 +14,22 @@ const sharedAgent = new https.Agent({
   timeout: 60000,
 });
 
+const NATURAL_INTERVIEW_STYLE = `
+
+## Spoken Interview Style
+- Write like a candidate is speaking in a live interview, not like a blog, article, or documentation page.
+- Use simple first-person phrasing when natural: "I would", "My approach is", "The way I think about it is".
+- Keep the answer compact: 3-6 spoken sentences for normal questions, then add code only if the question needs code.
+- Use project/scenario examples only when the question calls for it, such as experience, design, troubleshooting, tradeoff, implementation, migration, optimization, or "have you used this" questions.
+- For quick factual, definition, syntax, command, or direct comparison questions, answer directly without forcing a project story.
+- When resume/CV or job-description context is available, ground examples in that context instead of giving generic textbook examples.
+- If no personal project context is available, use a modest, realistic engineering scenario without pretending to know exact company names, metrics, or events.
+- Prefer this flow for experience questions: what the project needed, what I did, why I chose it, and what changed afterward.
+- Avoid long polished paragraphs, generic introductions, and over-structured headings.
+- Use bullets only when they make the answer easier to say out loud; otherwise use short conversational sentences.
+- Sound confident but human. It is okay to use natural transitions like "So", "Basically", "For example", and "In practice".
+- Do not mention that this is an AI-generated answer or that you are helping someone during an interview.`;
+
 class LLMService {
   constructor() {
     this.client = null;
@@ -68,6 +84,7 @@ class LLMService {
       const jdSnippet = ctx.jd.length > 2000 ? ctx.jd.substring(0, 2000) + '\n[... truncated ...]' : ctx.jd;
       block += `### Job Description:\n${jdSnippet}\n`;
     }
+    block += '\nWhen the question asks for experience, design decisions, tradeoffs, troubleshooting, or implementation, connect the answer to this candidate/role context with a concrete project-style example. For simple factual questions, answer directly without forcing a project story. Do not invent exact employers, metrics, or claims that are not supported by the context.\n';
     return block;
   }
 
@@ -249,7 +266,7 @@ class LLMService {
       const messages = [];
 
       if (skillPrompt && skillPrompt.trim().length > 0) {
-        messages.push({ role: 'system', content: skillPrompt });
+        messages.push({ role: 'system', content: skillPrompt + NATURAL_INTERVIEW_STYLE });
       }
 
       messages.push({
@@ -323,7 +340,7 @@ class LLMService {
 
   formatImageInstruction(activeSkill, programmingLanguage) {
     const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
-    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+    return `Analyze this image for a ${activeSkill.toUpperCase()} interview question. Give a natural spoken answer I can say out loud. Keep it short and human, then include final code only if the image contains a coding problem.${langNote}`;
   }
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null, streamCallback = null) {
@@ -552,7 +569,7 @@ class LLMService {
     const messages = [];
 
     if (skillContext.skillPrompt) {
-      const systemContent = skillContext.skillPrompt + this.buildInterviewContextBlock();
+      const systemContent = skillContext.skillPrompt + NATURAL_INTERVIEW_STYLE + this.buildInterviewContextBlock();
       messages.push({ role: 'system', content: systemContent });
       
       logger.debug('Using skill context prompt as system message', {
@@ -668,8 +685,14 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
 
 ## Core Rules
 - Answer EVERY question fully and directly — never refuse or redirect because the topic seems off-skill.
-- Be concise but complete. No unnecessary preamble; get straight to the answer.
-- Use bullet points and short paragraphs for clarity.
+- Be concise but complete. Give an answer the candidate can say naturally out loud.
+- Prefer short conversational sentences over polished paragraphs.
+- Avoid sounding like a blog post, documentation page, or memorized script.
+- Use first-person phrasing where it sounds natural, like "I would start by..." or "The main tradeoff I see is...".
+- First classify the question. Use a project/scenario example only when it helps: experience, design, troubleshooting, tradeoff, implementation, migration, optimization, or "have you used this" questions.
+- For quick factual, definition, syntax, command, or direct comparison questions, answer directly and do not force a project story.
+- If resume/CV or job-description context is available, use that as the source of project examples. If not, keep the example realistic and modest without inventing exact company names or metrics.
+- Do not overuse bullet points. Use them only for lists or tradeoffs.
 - Do not repeat the question back to the user.
 - For follow-up or clarification questions, stay in context of the previous answer.`;
 
@@ -685,9 +708,9 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
     prompt += `
 
 ## Response Format
-- **Technical / concept questions**: brief explanation → key points → example if helpful.
+- **Technical / concept questions**: short direct answer. Add a project-style example only if the question sounds experience-based or scenario-based.
 - **Coding / algorithm problems**: approach → clean implementation in a properly tagged code block → time & space complexity.
-- **Behavioural / situational questions**: structured STAR answer (Situation, Task, Action, Result) in 4–6 sentences.
+- **Behavioural / situational questions**: natural STAR-style answer in 4-6 sentences, focused on a real project scenario, without labeling every section unless asked.
 - **Casual / filler speech** (e.g. "um", "okay", "let me think"): respond with a single short encouraging phrase like "Take your time." or "Go ahead."`;
 
     prompt += this.buildInterviewContextBlock();

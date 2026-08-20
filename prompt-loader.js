@@ -362,6 +362,12 @@ STRICT REQUIREMENTS:
       'systems-engineering': 'systems-engineering',
       'performance-engineering': 'systems-engineering',
       'operations-engineering': 'systems-engineering',
+
+      // Backend Engineering group → backend-engineering.md
+      'backend-engineering': 'backend-engineering',
+      'backend-engineer': 'backend-engineering',
+      'backend-development': 'backend-engineering',
+      'api-engineering': 'backend-engineering',
     };
 
     return skillMap[normalized] || normalized;

@@ -910,6 +910,7 @@ class ApplicationController {
       "reliability-engineering",
       "operations-engineering",
       "ai-specialist",
+      "backend-engineering",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);
