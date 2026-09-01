@@ -14,6 +14,74 @@ const llmService = require("./src/services/llm.service");
 const windowManager = require("./src/managers/window.manager");
 const sessionManager = require("./src/managers/session.manager");
 
+// ---------------------------------------------------------------------------
+// Global crash safety net
+// ---------------------------------------------------------------------------
+// The app was dying silently on transient background errors — most often the
+// Google Speech gRPC stream emitting "14 UNAVAILABLE: read ECONNRESET" during a
+// stream restart, which surfaced as an uncaughtException and (via winston's
+// default exitOnError) took the whole process down with no dialog.
+// These handlers keep the app alive for recoverable errors and only bail out on
+// genuinely fatal ones.
+const RECOVERABLE_ERROR_PATTERNS = [
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "EPIPE",
+  "socket hang up",
+  "read ECONNRESET",
+  "write after end",
+  "stream was destroyed",
+  "Cannot call write after a stream was destroyed",
+  "UNAVAILABLE",
+  "DEADLINE_EXCEEDED",
+  "No connection established",
+  "Object has been destroyed",
+  "Render frame was disposed",
+  "WebContents",
+];
+
+function isRecoverableError(err) {
+  if (!err) return true;
+  const msg = (err && (err.message || err.details)) ? String(err.message || err.details) : String(err);
+  // gRPC status codes: 14 = UNAVAILABLE, 4 = DEADLINE_EXCEEDED, 13 = INTERNAL
+  if (err && (err.code === 14 || err.code === 4 || err.code === 13)) return true;
+  return RECOVERABLE_ERROR_PATTERNS.some((p) => msg.includes(p));
+}
+
+process.on("uncaughtException", (err) => {
+  if (isRecoverableError(err)) {
+    logger.warn("Recoverable uncaughtException swallowed — app continues", {
+      error: err && err.message ? err.message : String(err),
+      code: err && err.code,
+    });
+    return;
+  }
+  logger.error("FATAL uncaughtException — shutting down", {
+    error: err && err.message ? err.message : String(err),
+    stack: err && err.stack,
+  });
+  try {
+    globalShortcut.unregisterAll();
+  } catch (_) {}
+  app.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  if (isRecoverableError(reason)) {
+    logger.warn("Recoverable unhandledRejection swallowed — app continues", {
+      reason: reason && reason.message ? reason.message : String(reason),
+      code: reason && reason.code,
+    });
+    return;
+  }
+  logger.error("Unhandled promise rejection (non-fatal, logged only)", {
+    reason: reason && reason.message ? reason.message : String(reason),
+    stack: reason && reason.stack,
+  });
+});
+
 class ApplicationController {
   constructor() {
     this.isReady = false;
@@ -62,6 +130,30 @@ class ApplicationController {
     app.on("window-all-closed", () => this.onWindowAllClosed());
     app.on("activate", () => this.onActivate());
     app.on("will-quit", () => this.onWillQuit());
+
+    // A renderer (window) crashing should not take the whole app down — log it
+    // and reload that window instead.
+    app.on("render-process-gone", (event, webContents, details) => {
+      logger.error("Renderer process gone", {
+        reason: details && details.reason,
+        exitCode: details && details.exitCode,
+      });
+      try {
+        if (webContents && !webContents.isDestroyed() && details && details.reason !== "clean-exit") {
+          webContents.reload();
+        }
+      } catch (err) {
+        logger.warn("Failed to reload crashed renderer", { error: err && err.message });
+      }
+    });
+
+    app.on("child-process-gone", (event, details) => {
+      logger.warn("Child process gone", {
+        type: details && details.type,
+        reason: details && details.reason,
+        name: details && details.name,
+      });
+    });
 
     this.setupIPCHandlers();
     this.setupServiceEventHandlers();
@@ -183,17 +275,29 @@ class ApplicationController {
     });
   }
 
+  // Send an IPC message to every live renderer, skipping windows/webContents
+  // that are being torn down. An unguarded .send() on a destroyed webContents
+  // throws "Object has been destroyed" and previously could crash the app.
+  broadcast(channel, payload) {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      try {
+        if (window.isDestroyed()) return;
+        const wc = window.webContents;
+        if (!wc || wc.isDestroyed()) return;
+        wc.send(channel, payload);
+      } catch (err) {
+        logger.warn("broadcast send failed", { channel, error: err && err.message });
+      }
+    });
+  }
+
   setupServiceEventHandlers() {
     speechService.on("recording-started", () => {
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("recording-started");
-      });
+      this.broadcast("recording-started");
     });
 
     speechService.on("recording-stopped", () => {
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("recording-stopped");
-      });
+      this.broadcast("recording-stopped");
     });
 
     speechService.on("transcription", (text) => {
@@ -208,30 +312,22 @@ class ApplicationController {
       });
 
       // Show each sentence in the chat as it arrives so the user sees live captions
-      BrowserWindow.getAllWindows().forEach((win) => {
-        win.webContents.send("transcription-received", { text });
-      });
+      this.broadcast("transcription-received", { text });
     });
 
     speechService.on("interim-transcription", (text) => {
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("interim-transcription", { text });
-      });
+      this.broadcast("interim-transcription", { text });
     });
 
     // Renderer process captures the mic via Web Audio API and sends chunks here
     speechService.on("start-mic-capture", () => {
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("recording-command", { command: "start" });
-      });
+      this.broadcast("recording-command", { command: "start" });
       logger.info("Sent recording-command:start to all renderer windows");
     });
 
     // On stream restart, tell renderer to stop mic before the new stream starts
     speechService.on("stop-mic-capture", () => {
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("recording-command", { command: "stop" });
-      });
+      this.broadcast("recording-command", { command: "stop" });
       logger.info("Sent recording-command:stop to all renderer windows (stream restart)");
     });
 
@@ -256,21 +352,14 @@ class ApplicationController {
 
     speechService.on("status", (status) => {
       this.speechAvailable = speechService.isAvailable ? speechService.isAvailable() : false;
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("speech-status", { status, available: this.speechAvailable });
-      });
-      // Also broadcast availability specifically
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("speech-availability", { available: this.speechAvailable });
-      });
+      this.broadcast("speech-status", { status, available: this.speechAvailable });
+      this.broadcast("speech-availability", { available: this.speechAvailable });
     });
 
     speechService.on("error", (error) => {
       // In error, still compute availability
       this.speechAvailable = speechService.isAvailable ? speechService.isAvailable() : false;
-      BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("speech-error", { error, available: this.speechAvailable });
-      });
+      this.broadcast("speech-error", { error, available: this.speechAvailable });
     });
   }
 
@@ -911,6 +1000,7 @@ class ApplicationController {
       "operations-engineering",
       "ai-specialist",
       "backend-engineering",
+      "microsoft-dynamics",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);

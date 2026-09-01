@@ -44,6 +44,7 @@ class MainWindowUI {
             'operations-engineering',
             'ai-specialist',
             'backend-engineering',
+            'microsoft-dynamics',
         ];
         
         this.init();
@@ -585,8 +586,9 @@ class MainWindowUI {
             'performance-engineering': 'Performance',
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
-            'ai-specialist': 'AI Specialist',
+            'ai-specialist': 'AI Engineer',
             'backend-engineering': 'Backend Eng',
+            'microsoft-dynamics': 'Dynamics 365',
         };
         
         const displaySkill = skillNames[skill] || skill.toUpperCase();
@@ -746,8 +748,9 @@ class MainWindowUI {
             'performance-engineering': 'Performance',
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
-            'ai-specialist': 'AI Specialist',
+            'ai-specialist': 'AI Engineer',
             'backend-engineering': 'Backend Eng',
+            'microsoft-dynamics': 'Dynamics 365',
         };
         
         logger.info('Updating skill indicator', {
@@ -868,8 +871,9 @@ class MainWindowUI {
             'performance-engineering': 'Performance',
             'reliability-engineering': 'Reliability',
             'operations-engineering': 'Operations',
-            'ai-specialist': 'AI Specialist',
+            'ai-specialist': 'AI Engineer',
             'backend-engineering': 'Backend Eng',
+            'microsoft-dynamics': 'Dynamics 365',
         };
         
         const displayName = skillNames[skill] || skill.toUpperCase();

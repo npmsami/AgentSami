@@ -582,10 +582,13 @@ class LLMService {
 
     conversationHistory
       .filter(event => {
-        return event.role !== 'system' && 
-               event.content && 
-               typeof event.content === 'string' && 
-               event.content.trim().length > 0;
+        return event.role !== 'system' &&
+               event.content &&
+               typeof event.content === 'string' &&
+               event.content.trim().length > 0 &&
+               // Only carry history from the same skill, so a previous skill's
+               // answers (e.g. DevOps) never bleed into a different skill's turn.
+               (!event.skill || event.skill === activeSkill);
       })
       .forEach(event => {
         const role = event.role === 'model' ? 'assistant' : 'user';
@@ -644,10 +647,12 @@ class LLMService {
 
     conversationHistory
       .filter(event => {
-        return event.role !== 'system' && 
-               event.content && 
-               typeof event.content === 'string' && 
-               event.content.trim().length > 0;
+        return event.role !== 'system' &&
+               event.content &&
+               typeof event.content === 'string' &&
+               event.content.trim().length > 0 &&
+               // Same-skill history only — don't let another skill's answers leak in.
+               (!event.skill || event.skill === activeSkill);
       })
       .slice(-8)
       .forEach(event => {
@@ -680,11 +685,23 @@ class LLMService {
   }
 
   getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage) {
-    let prompt = `You are an expert interview assistant helping a candidate during a live interview.
-Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY question the interviewer asks — interviews frequently cover multiple domains including system design, behavioural questions, general engineering, cloud, databases, networking, and more.
+    // Load the authoritative persona for the active skill so the live-transcription
+    // path uses the SAME identity/terminology rules as the typed-chat path.
+    // Without this the model had no skill context and would drift across domains
+    // (e.g. answering an AI Engineer "MCP" question as cloud/DevOps).
+    const skillPersona = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+
+    let prompt = '';
+    if (skillPersona) {
+      prompt += `${skillPersona}\n\n---\n\n`;
+    }
+
+    prompt += `You are an expert interview assistant helping a candidate during a live interview.
+Your role is fixed: **${activeSkill.toUpperCase()}**. Stay in that persona and its terminology for every answer — do not re-interpret domain-specific acronyms or concepts as belonging to another field, and do not switch to a different engineering role's framing or project stories.
+If the interviewer asks something genuinely outside the role (e.g. a behavioural or general system-design question), answer it briefly and plainly, then return to the role's perspective. Never invent a plausible-sounding definition for a term you don't recognise — say you're not sure what they mean and ask them to clarify.
 
 ## Core Rules
-- Answer EVERY question fully and directly — never refuse or redirect because the topic seems off-skill.
+- Answer EVERY question fully and directly — never refuse, but keep the role's persona.
 - Be concise but complete. Give an answer the candidate can say naturally out loud.
 - Prefer short conversational sentences over polished paragraphs.
 - Avoid sounding like a blog post, documentation page, or memorized script.
@@ -941,7 +958,8 @@ Your primary focus is ${activeSkill.toUpperCase()}, but you must answer ANY ques
       'presentation': ['slide', 'audience', 'public speaking', 'presentation', 'nervous'],
       'data-science': ['data', 'model', 'machine learning', 'statistics', 'analytics', 'python', 'pandas'],
       'devops': ['deployment', 'ci/cd', 'docker', 'kubernetes', 'infrastructure', 'monitoring'],
-      'ai-specialist': ['chatgpt', 'zapier', 'make.com', 'automation', 'prompt', 'workflow', 'llm', 'ai tool', 'midjourney', 'claude', 'gemini'],
+      'ai-specialist': ['rag', 'retrieval', 'embedding', 'vector', 'mcp', 'model context protocol', 'agent', 'llm', 'prompt', 'fine-tune', 'python', 'langchain', 'langgraph', 'eval', 'reranker', 'chunk', 'context window'],
+      'microsoft-dynamics': ['dynamics', 'd365', 'dataverse', 'power platform', 'power apps', 'power automate', 'plugin', 'plug-in', 'model-driven', 'canvas app', 'fetchxml', 'web api', 'business unit', 'security role', 'solution', 'managed solution', 'pcf', 'x++', 'finance and operations', 'business central', 'crm'],
       'negotiation': ['negotiate', 'compromise', 'agreement', 'terms', 'conflict resolution']
     };
 

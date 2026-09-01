@@ -231,15 +231,16 @@ class SessionManager {
   getSkillContext(skillName = null, programmingLanguage = null) {
     const targetSkill = skillName || this.currentSkill;
     
-    // Get skill prompt with programming language injection if provided
-    let skillPrompt = null;
-    if (programmingLanguage && promptLoader.requiresProgrammingLanguage(targetSkill)) {
-      // Use prompt loader to get language-enhanced prompt
-      skillPrompt = promptLoader.getSkillPrompt(targetSkill, programmingLanguage);
-    } else {
-      // Find skill prompt from session memory (fallback)
-      const skillPromptEvent = this.sessionMemory.find(event => 
-        event.action === 'skill_prompt_initialization' && 
+    // Always load the authoritative skill prompt from the prompt loader so the
+    // active skill's persona is guaranteed to be sent, even after a mid-session
+    // skill switch (previously this fell back to a session-memory lookup that
+    // could return null and let the previous skill's answers bleed through).
+    let skillPrompt = promptLoader.getSkillPrompt(targetSkill, programmingLanguage);
+
+    if (!skillPrompt) {
+      // Last-resort fallback: a skill prompt captured earlier in session memory
+      const skillPromptEvent = this.sessionMemory.find(event =>
+        event.action === 'skill_prompt_initialization' &&
         event.skill === targetSkill
       );
       skillPrompt = skillPromptEvent?.content || null;

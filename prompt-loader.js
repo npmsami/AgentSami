@@ -368,6 +368,21 @@ STRICT REQUIREMENTS:
       'backend-engineer': 'backend-engineering',
       'backend-development': 'backend-engineering',
       'api-engineering': 'backend-engineering',
+
+      // Microsoft Dynamics 365 / Power Platform group → microsoft-dynamics.md
+      'microsoft-dynamics': 'microsoft-dynamics',
+      'dynamics-365': 'microsoft-dynamics',
+      'dynamics365': 'microsoft-dynamics',
+      'dynamics': 'microsoft-dynamics',
+      'dynamics-crm': 'microsoft-dynamics',
+      'd365': 'microsoft-dynamics',
+      'power-platform': 'microsoft-dynamics',
+      'powerplatform': 'microsoft-dynamics',
+      'dataverse': 'microsoft-dynamics',
+      'power-apps': 'microsoft-dynamics',
+      'powerapps': 'microsoft-dynamics',
+      'dynamics-f-and-o': 'microsoft-dynamics',
+      'dynamics-finance-and-operations': 'microsoft-dynamics',
     };
 
     return skillMap[normalized] || normalized;

@@ -153,15 +153,35 @@ class SpeechService extends EventEmitter {
     }
   }
 
+  // Safely tear down a recognize stream. We must NOT leave it with zero 'error'
+  // listeners: gRPC can emit an async error (e.g. "14 UNAVAILABLE: read
+  // ECONNRESET") on the old stream *after* teardown, and an EventEmitter 'error'
+  // with no listener becomes an uncaughtException that used to crash the app.
+  _teardownStream(stream) {
+    if (!stream) return;
+    try {
+      stream.removeAllListeners('data');
+      stream.removeAllListeners('end');
+      stream.removeAllListeners('response');
+      stream.removeAllListeners('error');
+      // Permanent error sink for late/async errors from the discarded stream.
+      stream.on('error', (err) => {
+        logger.warn('Ignoring late error from torn-down speech stream', {
+          message: err && err.message ? err.message : String(err),
+          code: err && err.code,
+        });
+      });
+    } catch (_) {}
+    try { stream.destroy(); } catch (_) {}
+  }
+
   // Called by main.js when renderer reports the actual AudioContext sample rate.
   // Restarts the Google Speech stream with the correct rate before audio flows.
   restartStreamWithSampleRate(rate) {
     this.sampleRate = rate || this.sampleRate;
     logger.info('Restarting Google Speech stream with renderer sample rate', { rate: this.sampleRate });
     if (this.recognizeStream) {
-      // Remove listeners BEFORE destroying to avoid the error handler firing as a false alarm
-      this.recognizeStream.removeAllListeners();
-      try { this.recognizeStream.destroy(); } catch (_) {}
+      this._teardownStream(this.recognizeStream);
       this.recognizeStream = null;
     }
     if (this.isRecording) {
@@ -183,9 +203,13 @@ class SpeechService extends EventEmitter {
   }
 
   _restartStream() {
+    if (this._restarting) {
+      logger.debug('Stream restart already in progress — skipping duplicate');
+      return;
+    }
+    this._restarting = true;
     if (this.recognizeStream) {
-      this.recognizeStream.removeAllListeners();
-      try { this.recognizeStream.destroy(); } catch (_) {}
+      this._teardownStream(this.recognizeStream);
       this.recognizeStream = null;
     }
     if (this.isRecording) {
@@ -193,8 +217,11 @@ class SpeechService extends EventEmitter {
       // during the restart gap, then _startStream will re-emit start-mic-capture.
       this.emit('stop-mic-capture');
       setTimeout(() => {
+        this._restarting = false;
         if (this.isRecording) this._startStream();
       }, 500);
+    } else {
+      this._restarting = false;
     }
   }
 
@@ -202,6 +229,7 @@ class SpeechService extends EventEmitter {
     if (!this.isRecording) return;
 
     this.isRecording = false;
+    this._restarting = false;
     const sessionDuration = this.sessionStartTime ? Date.now() - this.sessionStartTime : 0;
 
     if (this.streamRestartTimer) {
@@ -210,9 +238,23 @@ class SpeechService extends EventEmitter {
     }
 
     if (this.recognizeStream) {
-      this.recognizeStream.removeAllListeners();
-      try { this.recognizeStream.end(); } catch (_) {}
+      const stream = this.recognizeStream;
       this.recognizeStream = null;
+      // Swap listeners for an error sink, then flush with end() rather than
+      // destroy() so any buffered final transcript can still come back.
+      try {
+        stream.removeAllListeners('data');
+        stream.removeAllListeners('end');
+        stream.removeAllListeners('response');
+        stream.removeAllListeners('error');
+        stream.on('error', (err) => {
+          logger.warn('Ignoring late error from stopped speech stream', {
+            message: err && err.message ? err.message : String(err),
+            code: err && err.code,
+          });
+        });
+      } catch (_) {}
+      try { stream.end(); } catch (_) {}
     }
 
     logger.info('Speech recognition stopped', { sessionDuration: `${sessionDuration}ms` });

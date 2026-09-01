@@ -25,6 +25,12 @@ class Logger {
       level: process.env.LOG_LEVEL || 'info',
       format: logFormat,
       defaultMeta: { pid: process.pid },
+      // Log uncaught exceptions / rejections but DO NOT let winston call
+      // process.exit() afterwards. The app's own handlers in main.js decide
+      // whether an error is fatal. Without this, a transient gRPC/network error
+      // (e.g. "14 UNAVAILABLE: read ECONNRESET" from the speech stream) would
+      // silently kill the whole app.
+      exitOnError: false,
       transports: [
         new winston.transports.Console({
           format: winston.format.combine(
